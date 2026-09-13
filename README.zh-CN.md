@@ -4,7 +4,7 @@
 
 </div>
 
-<img src="assets/preview.png" alt="把「无标题」换成从笔记正文中读出的真标题：旧书店淘书与周末杂记" width="100%">
+<img src="assets/preview.png" alt="预览图：左侧是插件的功能清单，右侧是标题确认窗口，五篇无标题笔记一次生成完毕" width="100%">
 
 # AI标题生成
 
@@ -139,7 +139,7 @@ npm run typecheck  # tsc --noEmit
 npm run icon       # 重新生成 assets/icon.png 并压缩 assets/preview.png
 ```
 
-`assets/preview.png` 是 `assets/preview.html` 在 1200×750 下的 Chrome 截图。需要更新时，以该分辨率对该页面截图覆盖原文件，再执行 `npm run icon` 压缩。
+`assets/preview.png` 是 `assets/preview.html` 在 1024×768 下的 Chrome 截图——这是集市要求的尺寸，体积上限 512 KiB。需要更新时，以该分辨率对该页面截图覆盖原文件，再执行 `node scripts/render-preview.mjs` 压缩。该脚本会在页面尺寸或截图尺寸对不上时直接报错退出，避免再出现尺寸不合规的预览图。
 
 ## 许可
 

@@ -4,7 +4,7 @@
 
 </div>
 
-<img src="assets/preview.png" alt="A note titled 无标题 becomes 旧书店淘书与周末杂记, the title derived from the note body" width="100%">
+<img src="assets/preview.png" alt="Preview: a list of the plugin's capabilities beside its title review dialog, where five untitled notes have each been given a title in one pass" width="100%">
 
 # AI Title
 
@@ -139,7 +139,7 @@ npm run typecheck  # tsc --noEmit
 npm run icon       # regenerate assets/icon.png and compress assets/preview.png
 ```
 
-`assets/preview.png` is a Chrome capture of `assets/preview.html` at 1200×750. To update it, screenshot the page at that size over the file, then run `npm run icon` to compress it.
+`assets/preview.png` is a Chrome capture of `assets/preview.html` at 1024×768 — the size the marketplace asks for, capped at 512 KiB. To update it, screenshot the page at that size over the file, then run `node scripts/render-preview.mjs` to compress it. That script fails if either the page or the capture is off-size, so a wrong-sized preview cannot ship unnoticed.
 
 ## License
 

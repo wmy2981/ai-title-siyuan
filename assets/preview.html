@@ -4,205 +4,371 @@
 <meta charset="utf-8">
 <title>AI Title — 功能预览</title>
 <style>
-  /* 发行素材：按 1200x750 截图生成 assets/preview.png。
+  /* 发行素材：按 1024x768 截图生成 assets/preview.png。
+     尺寸是集市的要求（plugin-sample/README.md：建议 1024*768，上限 512 KiB），
+     render-preview.mjs 会按这两个数校验，改动尺寸要同步改那里。
 
-     这一版刻意不用卡片网格：六个等权重的圆角卡片把特性摆开，读者不会记住任何一条，
-     而且那是任何产品都能套的模板。改成讲清一件具体的事——
-     「无标题」被换成一个从正文里读出来的真标题，其余特性压到一行。 */
+     这一版是功能宣传图，不是叙事图：左边列出能力清单，右边直接摆出插件的
+     确认窗口本体。之前那版用「无标题 → 某个具体标题」讲了一次转换的故事，
+     看完只记住一个标题；这里让七个能力点和真实界面同时说话。
+
+     配色取自 assets/icon.svg：深蓝底 #141B2D + 品牌蓝 #2F6FED，
+     并复用图标右下角那道圆弧作为背景光晕，让图标与预览图是一套设计。 */
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   body {
-    width: 1200px;
-    height: 750px;
+    width: 1024px;
+    height: 768px;
     overflow: hidden;
-    background: #FBF9F5;
-    color: #14161C;
-    font: 16px/1.55 -apple-system, "Segoe UI", "Microsoft YaHei", Roboto, sans-serif;
+    /* 比图标的砖块（#141B2D）再暗一档：两者同色的话图标会整块隐形，
+       只剩一道白杠浮在页面上，看着像没渲染出来 */
+    background: #0D1220;
+    color: #FFFFFF;
+    font: 16px/1.55 "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
 
+  /* 图标右下角的圆弧，放大成一层很淡的光晕铺在右下 */
+  .glow {
+    position: absolute;
+    right: -170px;
+    bottom: -210px;
+    width: 620px;
+    height: 620px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(47, 111, 237, .30), rgba(47, 111, 237, 0) 68%);
+  }
+
   .page {
+    position: relative;
     height: 100%;
-    padding: 62px 72px 0;
+    padding: 46px 56px 40px;
     display: flex;
     flex-direction: column;
   }
 
-  /* ---- 标题区：只留名称与一句话 ---- */
-  header { margin-bottom: 40px; }
+  /* ---- 抬头：图标 + 名称 + 一句话 ---- */
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+  }
+
+  /* 描一道极淡的边，给图标砖块一个明确的轮廓。
+     圆角跟图标自己的 clipPath 对齐：34/160 × 48px */
+  .brand svg {
+    border-radius: 10.2px;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, .1);
+  }
 
   h1 {
-    font-size: 54px;
+    font-size: 34px;
     font-weight: 700;
-    letter-spacing: -.03em;
-    line-height: 1.08;
+    letter-spacing: -.02em;
+    line-height: 1.1;
   }
 
-  .tagline {
+  .value {
     margin-top: 12px;
-    font-size: 18px;
-    line-height: 1.6;
-    color: #62687A;
-    max-width: 800px;
+    font-size: 16px;
+    color: #8C99B8;
   }
 
-  /* ---- 主体：一条从左到右的变换 ---- */
-  .transform {
+  /* ---- 主体：左能力清单 / 右确认窗口 ---- */
+  .body {
     display: grid;
-    grid-template-columns: 1fr 128px 1.22fr;
-    align-items: center;
-    gap: 0;
-    margin-bottom: 46px;
+    grid-template-columns: 316px 1fr;
+    gap: 30px;
+    margin-top: 34px;
+    flex: 1;
+    min-height: 0;
   }
 
-  .note {
-    border-radius: 14px;
-    padding: 24px 26px;
-  }
-
-  .note--before {
-    background: #FFFFFF;
-    border: 1px solid #E7E3DA;
-  }
-
-  .note--after {
-    background: #FFFFFF;
-    border: 1px solid #DCE4F6;
-    box-shadow: 0 14px 34px -18px rgba(47, 111, 237, .38);
-  }
-
-  .note__label {
-    font-size: 13px;
-    color: #8A8F9E;
-    margin-bottom: 14px;
-  }
-
-  .note__title-before {
-    font-size: 24px;
-    font-weight: 600;
-    color: #A9AEBA;
-  }
-
-  .note__title-after {
-    font-size: 24px;
-    font-weight: 650;
-    color: #14161C;
-    letter-spacing: -.012em;
-  }
-
-  .note__body {
-    margin-top: 17px;
-    padding-top: 15px;
-    border-top: 1px solid #EFECE5;
-    font-size: 14.5px;
-    line-height: 1.7;
-    color: #7C8291;
-  }
-  .note--after .note__body { border-top-color: #EDF1FA; }
-
-  /* 箭头：整张图唯一用强调色的地方。
-     色相与 assets/icon.svg 的渐变一致（蓝 -> 紫），
-     让图标与宣传图看起来是同一套设计而不是两套。 */
-  .arrow {
-    display: grid;
-    place-items: center;
-    position: relative;
-  }
-  .arrow::before {
-    content: "";
-    position: absolute;
-    left: 14px;
-    right: 14px;
-    height: 2px;
-    background: linear-gradient(90deg, rgba(47,111,237,.16), rgba(124,77,255,.5));
-  }
-  .arrow svg {
-    position: relative;
-    width: 26px;
-    height: 26px;
-    fill: url(#arrowGrad);
-  }
-
-  /* ---- 特性：一行讲完，不抢主体 ---- */
   .features {
     display: flex;
-    gap: 9px;
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: 25px;
   }
 
-  .chip {
-    font-size: 14px;
-    color: #55596A;
-    background: #FFFFFF;
-    border: 1px solid #E7E3DA;
-    border-radius: 999px;
-    padding: 8px 16px;
+  .feature {
+    display: grid;
+    grid-template-columns: 18px 1fr;
+    gap: 10px;
   }
 
-  footer {
-    margin-top: auto;
-    padding: 20px 0 30px;
-    border-top: 1px solid #EDE9E1;
+  .feature svg {
+    width: 15px;
+    height: 15px;
+    margin-top: 4px;
+    fill: #2F6FED;
+  }
+
+  .feature__name {
+    font-size: 15.5px;
+    font-weight: 600;
+    letter-spacing: -.005em;
+  }
+
+  .feature__desc {
+    margin-top: 2px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #7E8CAC;
+  }
+
+  /* ---- 确认窗口本体 ---- */
+  .dlg {
+    background: #1B2438;
+    border: 1px solid #2B3752;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .dlg__title {
+    padding: 13px 17px;
+    font-size: 14.5px;
+    font-weight: 600;
+    border-bottom: 1px solid #2B3752;
+  }
+
+  .dlg__body {
+    padding: 11px 13px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .dlg__hint {
+    padding: 0 2px;
+    font-size: 11.5px;
+    color: #6C7A9B;
+  }
+
+  .row {
+    background: #212C45;
+    border-radius: 8px;
+    padding: 8px 11px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .row__head {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    font-size: 14px;
-    color: #8A8F9E;
+    gap: 8px;
+  }
+
+  /* 思源的 b3-switch：已勾选是蓝底、滑块靠右 */
+  .sw {
+    flex: none;
+    width: 26px;
+    height: 15px;
+    border-radius: 999px;
+    background: #2F6FED;
+    position: relative;
+  }
+  .sw::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: #FFFFFF;
+  }
+
+  .row__name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    color: #8C99B8;
+  }
+
+  .row__regen {
+    flex: none;
+    width: 13px;
+    height: 13px;
+    fill: #8C99B8;
+  }
+
+  .row__input {
+    background: #141B2D;
+    border: 1px solid #2B3752;
+    border-radius: 5px;
+    padding: 4px 8px;
+    font-size: 12.5px;
+    color: #E8EDF8;
+  }
+
+  .dlg__action {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 11px 13px;
+    border-top: 1px solid #2B3752;
+  }
+
+  .dlg__action .spacer { flex: 1; }
+
+  .btn {
+    font-size: 12.5px;
+    padding: 5px 13px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+  }
+
+  .btn--text { color: #8C99B8; }
+  .btn--cancel { color: #C3CCE0; border-color: #35425F; }
+  .btn--apply { background: #2F6FED; color: #FFFFFF; font-weight: 600; }
+
+  footer {
+    margin-top: 26px;
+    font-size: 13px;
+    color: #6C7A9B;
   }
 </style>
 </head>
 <body>
-<svg width="0" height="0" aria-hidden="true"><defs>
-  <linearGradient id="arrowGrad" x1="0" y1="0" x2="1" y2="1">
-    <stop offset="0" stop-color="#2F6FED"/>
-    <stop offset="1" stop-color="#7C4DFF"/>
-  </linearGradient>
-</defs></svg>
+<div class="glow"></div>
 <div class="page">
-  <header>
+  <div class="brand">
+    <svg width="48" height="48" viewBox="0 0 160 160" aria-hidden="true">
+      <defs>
+        <clipPath id="tile">
+          <rect width="160" height="160" rx="34"/>
+        </clipPath>
+      </defs>
+      <g clip-path="url(#tile)">
+        <rect width="160" height="160" fill="#141B2D"/>
+        <circle cx="163" cy="163" r="88" fill="#2F6FED"/>
+        <rect x="30" y="58" width="100" height="20" rx="10" fill="#FFFFFF"/>
+        <rect x="30" y="92" width="56" height="10" rx="5" fill="#FFFFFF" opacity="0.34"/>
+        <rect x="30" y="110" width="36" height="10" rx="5" fill="#FFFFFF" opacity="0.2"/>
+      </g>
+    </svg>
     <h1>AI Title</h1>
-    <p class="tagline">读一遍笔记内容，替你起个像样的标题。选一篇或五十篇都行，处理完先交给你确认，再写回笔记。</p>
-  </header>
+  </div>
+  <p class="value">给笔记批量生成标题，写回前先过目。</p>
 
-  <div class="transform">
-    <div class="note note--before">
-      <div class="note__label">处理前</div>
-      <div class="note__title-before">无标题</div>
-      <div class="note__body">
-        周六去了趟城南的旧书店，淘到一本八十年代的植物图鉴，插图是手绘的。
-        店主说这批书是从一个老教师家里收来的。
-        回来路上顺便去了菜市场，晚上的番茄牛腩炖得比上次好，下次少放点糖。
+  <div class="body">
+    <div class="features">
+      <div class="feature">
+        <svg viewBox="0 0 16 16"><path d="M6.2 11.7 3.4 8.9 2.3 10l3.9 3.9 8-8-1.1-1.1z"/></svg>
+        <div>
+          <div class="feature__name">批量生成</div>
+          <div class="feature__desc">文档树选中多篇，并发请求</div>
+        </div>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 16 16"><path d="M6.2 11.7 3.4 8.9 2.3 10l3.9 3.9 8-8-1.1-1.1z"/></svg>
+        <div>
+          <div class="feature__name">写回前确认</div>
+          <div class="feature__desc">逐条勾选、改写、单条重新生成</div>
+        </div>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 16 16"><path d="M6.2 11.7 3.4 8.9 2.3 10l3.9 3.9 8-8-1.1-1.1z"/></svg>
+        <div>
+          <div class="feature__name">兼容任意接口</div>
+          <div class="feature__desc">任何 OpenAI 兼容端点</div>
+        </div>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 16 16"><path d="M6.2 11.7 3.4 8.9 2.3 10l3.9 3.9 8-8-1.1-1.1z"/></svg>
+        <div>
+          <div class="feature__name">一键从思源导入</div>
+          <div class="feature__desc">复用已配好的供应商与密钥</div>
+        </div>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 16 16"><path d="M6.2 11.7 3.4 8.9 2.3 10l3.9 3.9 8-8-1.1-1.1z"/></svg>
+        <div>
+          <div class="feature__name">提示词可定制</div>
+          <div class="feature__desc">系统 / 用户提示词 + 占位符</div>
+        </div>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 16 16"><path d="M6.2 11.7 3.4 8.9 2.3 10l3.9 3.9 8-8-1.1-1.1z"/></svg>
+        <div>
+          <div class="feature__name">关闭思考</div>
+          <div class="feature__desc">推理模型省下 token 与等待</div>
+        </div>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 16 16"><path d="M6.2 11.7 3.4 8.9 2.3 10l3.9 3.9 8-8-1.1-1.1z"/></svg>
+        <div>
+          <div class="feature__name">多个入口</div>
+          <div class="feature__desc">顶栏、面包屑、文档树右键、命令面板</div>
+        </div>
       </div>
     </div>
 
-    <div class="arrow">
-      <svg viewBox="0 0 24 24"><path d="M4 11h12.2l-4.6-4.6L13 5l7 7-7 7-1.4-1.4 4.6-4.6H4z"/></svg>
-    </div>
+    <div class="dlg">
+      <div class="dlg__title">确认 AI 生成的标题</div>
+      <div class="dlg__body">
+        <div class="dlg__hint">重命名无法用 Ctrl+Z 撤销，取消勾选可跳过</div>
 
-    <div class="note note--after">
-      <div class="note__label">处理后</div>
-      <div class="note__title-after">旧书店淘书与周末杂记</div>
-      <div class="note__body">
-        周六去了趟城南的旧书店，淘到一本八十年代的植物图鉴，插图是手绘的。
-        店主说这批书是从一个老教师家里收来的。
-        回来路上顺便去了菜市场，晚上的番茄牛腩炖得比上次好，下次少放点糖。
+        <div class="row">
+          <div class="row__head">
+            <span class="sw"></span>
+            <span class="row__name">无标题</span>
+            <svg class="row__regen" viewBox="0 0 24 24"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4c-4.42 0-7.99 3.58-8 8s3.58 8 8 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4z"/></svg>
+          </div>
+          <div class="row__input">城南旧书店淘书与周末杂记</div>
+        </div>
+
+        <div class="row">
+          <div class="row__head">
+            <span class="sw"></span>
+            <span class="row__name">未命名文档</span>
+            <svg class="row__regen" viewBox="0 0 24 24"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4c-4.42 0-7.99 3.58-8 8s3.58 8 8 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4z"/></svg>
+          </div>
+          <div class="row__input">Rust 所有权与借用检查</div>
+        </div>
+
+        <div class="row">
+          <div class="row__head">
+            <span class="sw"></span>
+            <span class="row__name">会议纪要</span>
+            <svg class="row__regen" viewBox="0 0 24 24"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4c-4.42 0-7.99 3.58-8 8s3.58 8 8 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4z"/></svg>
+          </div>
+          <div class="row__input">Q3 排期评审的三个结论</div>
+        </div>
+
+        <div class="row">
+          <div class="row__head">
+            <span class="sw"></span>
+            <span class="row__name">读书笔记</span>
+            <svg class="row__regen" viewBox="0 0 24 24"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4c-4.42 0-7.99 3.58-8 8s3.58 8 8 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4z"/></svg>
+          </div>
+          <div class="row__input">《植物图鉴》里的手绘插图</div>
+        </div>
+
+        <div class="row">
+          <div class="row__head">
+            <span class="sw"></span>
+            <span class="row__name">待整理</span>
+            <svg class="row__regen" viewBox="0 0 24 24"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4c-4.42 0-7.99 3.58-8 8s3.58 8 8 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4z"/></svg>
+          </div>
+          <div class="row__input">家庭网络改造：Mesh 组网踩坑</div>
+        </div>
+      </div>
+      <div class="dlg__action">
+        <span class="btn btn--text">全选</span>
+        <span class="btn btn--text">全不选</span>
+        <span class="spacer"></span>
+        <span class="btn btn--cancel">取消</span>
+        <span class="btn btn--apply">应用 5</span>
       </div>
     </div>
   </div>
 
-  <div class="features">
-    <span class="chip">批量并发生成</span>
-    <span class="chip">写回前可逐条修改</span>
-    <span class="chip">提示词自定义</span>
-    <span class="chip">兼容任意 OpenAI 接口</span>
-    <span class="chip">可关闭思考</span>
-    <span class="chip">调试模式</span>
-  </div>
-
-  <footer>
-    <span>思源插件 · 支持桌面端、移动端与浏览器</span>
-    <span>重命名无法撤销，批量改动会先询问</span>
-  </footer>
+  <footer>桌面端、移动端与浏览器均可使用，跟随思源明暗主题。</footer>
 </div>
 </body>
 </html>
