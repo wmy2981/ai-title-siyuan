@@ -27,7 +27,7 @@ This plugin does the naming pass for you. It reads each note's content, asks a m
 
 ## Requirements
 
-- SiYuan 3.1.0 or later.
+- SiYuan 3.8.3 or later.
 - An OpenAI-compatible chat completions endpoint, and its base URL and API key.
 - An administrator role. The plugin sends requests through the kernel, which requires it. The desktop app satisfies this by default; the publish service never does, which is why the plugin is marked as disabled there.
 
@@ -92,10 +92,10 @@ Reasoning models can be slow, and some leave `content` empty while putting every
 | Option | What it sends |
 | --- | --- |
 | Do not disable | nothing |
-| *(preset)* | `"enable_thinking": false` |
-| *(preset)* | `"extra_body": {"enable_thinking": false}` |
-| *(preset)* | `"chat_template_kwargs": {"enable_thinking": false}` |
-| *(preset)* | `"thinking": {"type": "disabled"}` |
+| *(preset)* | `{"enable_thinking": false}` |
+| *(preset)* | `{"extra_body": {"enable_thinking": false}}` |
+| *(preset)* | `{"chat_template_kwargs": {"enable_thinking": false}}` |
+| *(preset)* | `{"thinking": {"type": "disabled"}}` |
 | Custom | whatever JSON object you provide |
 
 No single field disables reasoning everywhere, so pick the one your provider documents. If the provider does not recognise it, the plugin surfaces the error rather than silently dropping the field — a silently ignored option would leave you believing reasoning was off when it was not.

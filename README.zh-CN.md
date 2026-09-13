@@ -27,7 +27,7 @@
 
 ## 环境要求
 
-- 思源 3.1.0 或更高版本。
+- 思源 3.8.3 或更高版本。
 - 一个 OpenAI 兼容的 chat completions 接口，及其 Base URL 与 API Key。
 - 管理员角色。插件通过内核发起请求，因此需要该角色。桌面端默认满足；发布服务下永远不满足，所以插件在此场景被标记为不可用。
 
@@ -92,10 +92,10 @@ npm run build
 | 选项 | 发送内容 |
 | --- | --- |
 | 不禁用 | 不发送任何字段 |
-| *(预设)* | `"enable_thinking": false` |
-| *(预设)* | `"extra_body": {"enable_thinking": false}` |
-| *(预设)* | `"chat_template_kwargs": {"enable_thinking": false}` |
-| *(预设)* | `"thinking": {"type": "disabled"}` |
+| *(预设)* | `{"enable_thinking": false}` |
+| *(预设)* | `{"extra_body": {"enable_thinking": false}}` |
+| *(预设)* | `{"chat_template_kwargs": {"enable_thinking": false}}` |
+| *(预设)* | `{"thinking": {"type": "disabled"}}` |
 | 自定义 | 你填写的任意 JSON 对象 |
 
 没有任何一个字段能在所有供应商上关闭思考，所以请选你的供应商文档里写明的那个。若供应商不认该参数，插件会把错误原文展示出来，而不是悄悄丢弃它——静默忽略只会让你以为思考已关闭，实际并没有。
