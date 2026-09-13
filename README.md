@@ -81,7 +81,7 @@ Open **Settings → Marketplace → Downloaded → AI Title → Settings**.
 | **Single note only** | Written directly | Confirmation dialog |
 | **Always** | Written directly | Written directly |
 
-Selecting more than one note **always** opens the confirmation dialog, whichever mode is set. Bulk-renaming documents is destructive and SiYuan's rename has no undo stack.
+Bulk-renaming documents is destructive and SiYuan's rename has no undo stack. **A failed batch still opens the dialog first**: some notes came back without a title, and that is worth seeing before applying the rest.
 
 ### Disabling reasoning
 
