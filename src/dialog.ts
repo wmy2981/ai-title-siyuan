@@ -53,6 +53,20 @@ function button(className: string, text: string): HTMLButtonElement {
     return node;
 }
 
+/**
+ * 思源官方的纯图标按钮，写法见 app/src/ai/editor.ts 的 createTaskIconButton。
+ * 三处都不能省：block__icon 默认 opacity:0，要 --show 才可见；
+ * ariaLabel 是思源全局的悬浮提示机制，靠 aria-label 取文案、data-position 定方向。
+ */
+function iconButton(icon: string, label: string): HTMLButtonElement {
+    const node = document.createElement("button");
+    node.className = "block__icon block__icon--show ariaLabel";
+    node.dataset.position = "north";
+    node.setAttribute("aria-label", label);
+    node.innerHTML = `<svg><use xlink:href="#${icon}"></use></svg>`;
+    return node;
+}
+
 /** 官方开关：b3-switch 必须落在 input 上，包一层 label 会同时画出原生复选框和畸形胶囊。 */
 function switchControl(): HTMLInputElement {
     const input = document.createElement("input");
@@ -146,7 +160,14 @@ export function openGenerateDialog(options: GenerateDialogOptions): void {
         const status = div("ai-title__row-status", generated ? "" : reasonText(t, result));
 
         const actions = div("fn__flex");
-        const regenButton = button("b3-button b3-button--text", t("regenerate"));
+        // 图标取自思源内置图标集，与它自己 AI 面板里的「重试」是同一个
+        const regenButton = iconButton("iconRefresh", t("regenerate"));
+        // 没有文字，忙碌状态靠图标旋转 + 改写悬浮提示表达
+        const setBusy = (busy: boolean): void => {
+            regenButton.disabled = busy;
+            regenButton.classList.toggle("fn__rotate", busy);
+            regenButton.setAttribute("aria-label", t(busy ? "regenerating" : "regenerate"));
+        };
         actions.append(regenButton);
 
         const input = document.createElement("input");
@@ -159,8 +180,7 @@ export function openGenerateDialog(options: GenerateDialogOptions): void {
         const row: Row = {id: result.id, result, checkbox, input, status, element: rowElement};
 
         regenButton.addEventListener("click", async () => {
-            regenButton.disabled = true;
-            regenButton.textContent = t("regenerating");
+            setBusy(true);
             try {
                 const next = await regenerateTitle(result.id, api, behavior);
                 result.title = next.title;
@@ -176,8 +196,7 @@ export function openGenerateDialog(options: GenerateDialogOptions): void {
             } catch (error) {
                 status.textContent = error instanceof Error ? error.message : String(error);
             } finally {
-                regenButton.disabled = false;
-                regenButton.textContent = t("regenerate");
+                setBusy(false);
             }
         });
 
