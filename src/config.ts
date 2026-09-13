@@ -124,7 +124,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
         disableThinking: THINKING_DISABLED,
         customThinking: "",
         temperature: 1.0,
-        topP: 1.0,
+        topP: 0.8,
         topK: null,
         maxTokens: 512,
     },

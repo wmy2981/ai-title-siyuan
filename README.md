@@ -61,7 +61,7 @@ Open **Settings → Marketplace → Downloaded → AI Title → Settings**.
 | --- | --- | --- | --- |
 | API | Protocol | Chat Completions API | Only this protocol is implemented. |
 | API | Temperature | `1.0` | `0`–`2`. Lower is more deterministic. |
-| API | Top P | `1.0` | Leave empty to omit from the request. |
+| API | Top P | `0.8` | Leave empty to omit from the request. |
 | API | Top K | *empty* | Omitted when empty. The official OpenAI API rejects unknown body parameters with a 400, so only fill this in for providers that accept it. |
 | API | Max output tokens | `512` | Sent as `max_completion_tokens`, falling back to `max_tokens` if the provider rejects that name. |
 | Behaviour | Timeout | `10000` ms | Per request. Batches are concurrent, so this is not a shared budget. |
