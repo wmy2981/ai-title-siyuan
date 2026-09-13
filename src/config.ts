@@ -158,7 +158,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     behavior: {
         timeout: 10000,
         retries: 1,
-        contentLimit: 4000,
+        contentLimit: 1000,
         batchSize: 3,
         concurrency: 3,
         autoApply: AUTO_APPLY_NEVER,

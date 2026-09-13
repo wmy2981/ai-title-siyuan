@@ -64,7 +64,7 @@ Open **Settings → Marketplace → Downloaded → AI Title → Settings**.
 | API | Max output tokens | `512` | Sent as `max_completion_tokens`, falling back to `max_tokens` if the provider rejects that name. |
 | Behaviour | Timeout | `10000` ms | Per request. Batches are concurrent, so this is not a shared budget. |
 | Behaviour | Retries | `1` | Only for rate limits, server errors, timeouts and network failures. |
-| Behaviour | Note content limit | `4000` characters | Each note is truncated on its own, keeping the beginning. |
+| Behaviour | Note content limit | `1000` characters | Each note is truncated on its own, keeping the beginning. |
 | Behaviour | Notes per request | `3` | Selecting more splits the work into batches. |
 | Behaviour | Max concurrent requests | `3` | Lower it if your provider rate limits. |
 | Behaviour | Apply titles automatically | Disabled | See below. |
