@@ -261,14 +261,14 @@ export default class AiTitlePlugin extends Plugin {
             return;
         }
 
-        // 自动应用只在「总是」，或「仅单篇笔记」且确实只有一篇时生效。
-        // 但批量改写是破坏性操作（思源的重命名没有撤销栈），
-        // 所以选中超过一篇时一律先弹确认窗口，无论自动应用档位。
+        // 「总是」是字面意思：单篇还是多篇都直接写回，不再拦一道确认。
+        // 「仅单篇笔记」则只在确实是一篇时静默，多篇仍然先给确认窗口。
+        // 批次出错时同样会弹窗（见下面的 batchErrors 条件）——
+        // 那种情况下有一部分笔记没有拿到标题，值得让人先看一眼再决定。
         const mayApplySilently = this.settings.behavior.autoApply === "always" ||
             (this.settings.behavior.autoApply === "single" && ids.length === 1);
-        const mustConfirm = ids.length > 1;
 
-        if (mayApplySilently && !mustConfirm && batchErrors.length === 0) {
+        if (mayApplySilently && batchErrors.length === 0) {
             await applyGeneratedSilently(this.t, results, notes);
             this.reportFailures(results, notes);
             return;
