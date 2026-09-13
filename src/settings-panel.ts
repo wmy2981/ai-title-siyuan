@@ -32,6 +32,7 @@ interface ProviderModel {
     id?: string;
     name?: string;
     displayName?: string;
+    enabled?: boolean;
 }
 
 interface SiyuanProvider {
@@ -41,6 +42,19 @@ interface SiyuanProvider {
     apiKey?: string;
     protocol?: string;
     models?: ProviderModel[];
+}
+
+/**
+ * 取供应商实际在用的模型名。
+ *
+ * 必须读 `name` 而不是 `id`：思源给每个模型也生成一个内部 id（形如 20260913135841-1u2j84c），
+ * 那个字符串发到接口上是取不到模型的。
+ * 一个供应商可以配多个模型，优先取启用中的那个。
+ */
+function activeModelName(provider: SiyuanProvider): string {
+    const models = provider.models ?? [];
+    const active = models.find((model) => model.enabled) ?? models[0];
+    return active?.name ?? "";
 }
 
 /** 把配置写回本组各控件。导入会整体替换接口配置，届时需要重跑。 */
@@ -586,10 +600,9 @@ function openImportDialog(t: T, settings: PluginSettings, onImported: () => void
         name.className = "ai-title__import-provider";
         name.textContent = provider.displayName || provider.id || "provider";
 
-        const modelId = (provider.models ?? [])[0]?.id ?? "-";
         const meta = document.createElement("div");
         meta.className = "ai-title__import-meta";
-        meta.textContent = `${provider.baseURL} · ${modelId}`;
+        meta.textContent = `${provider.baseURL} · ${activeModelName(provider) || "-"}`;
 
         const choose = document.createElement("button");
         choose.className = "b3-button b3-button--outline";
@@ -597,8 +610,8 @@ function openImportDialog(t: T, settings: PluginSettings, onImported: () => void
         choose.addEventListener("click", () => {
             settings.api.baseURL = provider.baseURL ?? "";
             settings.api.apiKey = provider.apiKey ?? "";
-            // 只取第一个模型作为起点，用户仍可在设置页改或重新拉取列表
-            settings.api.model = (provider.models ?? [])[0]?.id ?? "";
+            // 只取一个模型作为起点，用户仍可在设置页改或重新拉取列表
+            settings.api.model = activeModelName(provider);
             settings.api.protocol = "openai";
             dialog.destroy();
             onImported();
