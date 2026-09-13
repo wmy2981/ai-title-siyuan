@@ -701,12 +701,7 @@ function buildBehaviorGroup(root: HTMLElement, t: T, settings: PluginSettings): 
         autoApply.value = behavior.autoApply;
     });
 
-    const autoApplyBox = document.createElement("div");
-    const autoApplyNote = document.createElement("div");
-    autoApplyNote.className = "b3-label__text";
-    autoApplyNote.textContent = t("autoApplyBatchAlwaysAsk");
-    autoApplyBox.append(autoApply, autoApplyNote);
-    stackItem(items, t("autoApply"), t("autoApplyDesc"), autoApplyBox);
+    rowItem(items, t("autoApply"), t("autoApplyDesc"), autoApply);
 
     const language = input();
     language.addEventListener("input", () => {

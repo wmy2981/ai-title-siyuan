@@ -54,11 +54,10 @@
   "concurrencyDesc": "同时进行的批次数上限，遇到限流时调小",
 
   "autoApply": "自动应用标题",
-  "autoApplyDesc": "禁用时弹窗逐条确认；单篇直接应用；总是则全部直接应用",
+  "autoApplyDesc": "禁用时弹窗逐条确认；单篇直接应用；总是则全部直接应用。选中多篇笔记时始终先弹确认窗口，与档位无关",
   "autoApplyNever": "禁用",
   "autoApplySingle": "仅单篇笔记",
   "autoApplyAlways": "总是",
-  "autoApplyBatchAlwaysAsk": "选中超过一篇笔记时始终先弹确认窗口，与自动应用档位无关",
 
   "titleLanguage": "标题语言",
   "titleLanguageDesc": "填入 {{language}} 占位符",

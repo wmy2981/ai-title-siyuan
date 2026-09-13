@@ -54,11 +54,10 @@
   "concurrencyDesc": "How many batches may be in flight at once. Lower it if your provider rate limits",
 
   "autoApply": "Apply titles automatically",
-  "autoApplyDesc": "Disabled reviews every title first; single note applies directly; always applies everything directly",
+  "autoApplyDesc": "Disabled reviews every title first; single note applies directly; always applies everything directly. Several notes always open the confirmation dialog, whichever option is set",
   "autoApplyNever": "Disabled",
   "autoApplySingle": "Single note only",
   "autoApplyAlways": "Always",
-  "autoApplyBatchAlwaysAsk": "Selecting more than one note always opens the confirmation dialog, no matter which option is set",
 
   "titleLanguage": "Title language",
   "titleLanguageDesc": "Filled into the {{language}} placeholder",
