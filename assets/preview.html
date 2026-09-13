@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>AI Title — 功能预览</title>
+<style>
+  /* 发行素材：按 1200x750 截图生成 assets/preview.png。
+
+     这一版刻意不用卡片网格：六个等权重的圆角卡片把特性摆开，读者不会记住任何一条，
+     而且那是任何产品都能套的模板。改成讲清一件具体的事——
+     「无标题」被换成一个从正文里读出来的真标题，其余特性压到一行。 */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    width: 1200px;
+    height: 750px;
+    overflow: hidden;
+    background: #FBF9F5;
+    color: #14161C;
+    font: 16px/1.55 -apple-system, "Segoe UI", "Microsoft YaHei", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    height: 100%;
+    padding: 62px 72px 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ---- 标题区：只留名称与一句话 ---- */
+  header { margin-bottom: 40px; }
+
+  h1 {
+    font-size: 54px;
+    font-weight: 700;
+    letter-spacing: -.03em;
+    line-height: 1.08;
+  }
+
+  .tagline {
+    margin-top: 12px;
+    font-size: 18px;
+    line-height: 1.6;
+    color: #62687A;
+    max-width: 800px;
+  }
+
+  /* ---- 主体：一条从左到右的变换 ---- */
+  .transform {
+    display: grid;
+    grid-template-columns: 1fr 128px 1.22fr;
+    align-items: center;
+    gap: 0;
+    margin-bottom: 46px;
+  }
+
+  .note {
+    border-radius: 14px;
+    padding: 24px 26px;
+  }
+
+  .note--before {
+    background: #FFFFFF;
+    border: 1px solid #E7E3DA;
+  }
+
+  .note--after {
+    background: #FFFFFF;
+    border: 1px solid #DCE4F6;
+    box-shadow: 0 14px 34px -18px rgba(47, 111, 237, .38);
+  }
+
+  .note__label {
+    font-size: 13px;
+    color: #8A8F9E;
+    margin-bottom: 14px;
+  }
+
+  .note__title-before {
+    font-size: 24px;
+    font-weight: 600;
+    color: #A9AEBA;
+  }
+
+  .note__title-after {
+    font-size: 24px;
+    font-weight: 650;
+    color: #14161C;
+    letter-spacing: -.012em;
+  }
+
+  .note__body {
+    margin-top: 17px;
+    padding-top: 15px;
+    border-top: 1px solid #EFECE5;
+    font-size: 14.5px;
+    line-height: 1.7;
+    color: #7C8291;
+  }
+  .note--after .note__body { border-top-color: #EDF1FA; }
+
+  /* 箭头：整张图唯一用强调色的地方。
+     色相与 assets/icon.svg 的渐变一致（蓝 -> 紫），
+     让图标与宣传图看起来是同一套设计而不是两套。 */
+  .arrow {
+    display: grid;
+    place-items: center;
+    position: relative;
+  }
+  .arrow::before {
+    content: "";
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    height: 2px;
+    background: linear-gradient(90deg, rgba(47,111,237,.16), rgba(124,77,255,.5));
+  }
+  .arrow svg {
+    position: relative;
+    width: 26px;
+    height: 26px;
+    fill: url(#arrowGrad);
+  }
+
+  /* ---- 特性：一行讲完，不抢主体 ---- */
+  .features {
+    display: flex;
+    gap: 9px;
+    flex-wrap: wrap;
+  }
+
+  .chip {
+    font-size: 14px;
+    color: #55596A;
+    background: #FFFFFF;
+    border: 1px solid #E7E3DA;
+    border-radius: 999px;
+    padding: 8px 16px;
+  }
+
+  footer {
+    margin-top: auto;
+    padding: 20px 0 30px;
+    border-top: 1px solid #EDE9E1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 14px;
+    color: #8A8F9E;
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" aria-hidden="true"><defs>
+  <linearGradient id="arrowGrad" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#2F6FED"/>
+    <stop offset="1" stop-color="#7C4DFF"/>
+  </linearGradient>
+</defs></svg>
+<div class="page">
+  <header>
+    <h1>AI Title</h1>
+    <p class="tagline">读一遍笔记内容，替你起个像样的标题。选一篇或五十篇都行，处理完先交给你确认，再写回笔记。</p>
+  </header>
+
+  <div class="transform">
+    <div class="note note--before">
+      <div class="note__label">处理前</div>
+      <div class="note__title-before">无标题</div>
+      <div class="note__body">
+        周六去了趟城南的旧书店，淘到一本八十年代的植物图鉴，插图是手绘的。
+        店主说这批书是从一个老教师家里收来的。
+        回来路上顺便去了菜市场，晚上的番茄牛腩炖得比上次好，下次少放点糖。
+      </div>
+    </div>
+
+    <div class="arrow">
+      <svg viewBox="0 0 24 24"><path d="M4 11h12.2l-4.6-4.6L13 5l7 7-7 7-1.4-1.4 4.6-4.6H4z"/></svg>
+    </div>
+
+    <div class="note note--after">
+      <div class="note__label">处理后</div>
+      <div class="note__title-after">旧书店淘书与周末杂记</div>
+      <div class="note__body">
+        周六去了趟城南的旧书店，淘到一本八十年代的植物图鉴，插图是手绘的。
+        店主说这批书是从一个老教师家里收来的。
+        回来路上顺便去了菜市场，晚上的番茄牛腩炖得比上次好，下次少放点糖。
+      </div>
+    </div>
+  </div>
+
+  <div class="features">
+    <span class="chip">批量并发生成</span>
+    <span class="chip">写回前可逐条修改</span>
+    <span class="chip">提示词自定义</span>
+    <span class="chip">兼容任意 OpenAI 接口</span>
+    <span class="chip">可关闭思考</span>
+    <span class="chip">调试模式</span>
+  </div>
+
+  <footer>
+    <span>思源插件 · 支持桌面端、移动端与浏览器</span>
+    <span>重命名无法撤销，批量改动会先询问</span>
+  </footer>
+</div>
+</body>
+</html>

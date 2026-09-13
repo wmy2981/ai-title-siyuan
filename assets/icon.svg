@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160">
+  <!-- 市集图标：说的是「标题正在被写下」——一行白色实心标题跟一个插入符，
+       下面两行淡正文做层级。刻意不用四角星：那是任何 AI 产品都能套的符号，
+       读者扫一眼只会归类为「又一个 AI 插件」，记不住。
+
+       深色铺满整块砖承载内容（白字压在深色上才有对比），
+       品牌蓝从右下角压上来露出一道弧，作为唯一的彩色锚点。
+
+       软件内那份 24x24 单色图标在 src/icons.ts，构图与这里一致。 -->
+  <defs>
+    <clipPath id="tileClip">
+      <rect width="160" height="160" rx="34"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#tileClip)">
+    <rect width="160" height="160" fill="#141B2D"/>
+
+    <!-- 品牌蓝：压在右下角，只露出一道弧 -->
+    <circle cx="163" cy="163" r="88" fill="#2F6FED"/>
+
+    <!-- 标题行：整行宽，右端抵住色块边缘 -->
+    <rect x="30" y="58" width="94" height="20" rx="10" fill="#FFFFFF"/>
+
+    <!-- 插入符：正在输入的那一下 -->
+    <rect x="130" y="58" width="8" height="20" rx="4" fill="#7C9CF5"/>
+
+    <!-- 标题下方的两行正文，做出正文层级 -->
+    <rect x="30" y="92" width="56" height="10" rx="5" fill="#FFFFFF" opacity="0.34"/>
+    <rect x="30" y="110" width="36" height="10" rx="5" fill="#FFFFFF" opacity="0.2"/>
+  </g>
+</svg>
