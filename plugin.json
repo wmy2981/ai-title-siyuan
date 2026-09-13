@@ -4,8 +4,12 @@
   "url": "https://github.com/wmy2981/ai-title-siyuan",
   "version": "0.1.0",
   "minAppVersion": "3.8.3",
-  "backends": ["all"],
-  "frontends": ["all"],
+  "backends": [
+    "all"
+  ],
+  "frontends": [
+    "all"
+  ],
   "disabledInPublish": true,
   "displayName": {
     "default": "AI Title",
@@ -19,12 +23,19 @@
     "default": "README.md",
     "zh-CN": "README_zh_CN.md"
   },
+  "icon": "icon.png",
+  "preview": "preview.png",
+  "funding": {
+    "custom": [
+      "https://afdian.com/a/wmy2981"
+    ]
+  },
   "keywords": [
     "ai",
     "title",
-    "openai",
-    "chatgpt",
+    "deepseek",
+    "生成",
     "标题",
-    "AI标题"
+    "generate"
   ]
 }
