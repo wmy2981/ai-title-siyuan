@@ -29,7 +29,7 @@
   "importApply": "导入",
   "importEmpty": "思源设置里没有已填写 API Key 的 AI 供应商。",
 
-  "disableThinking": "是否禁用思考",
+  "disableThinking": "禁用思考",
   "disableThinkingDesc": "请求体带上 reasoning_effort: \"none\"。多数接口把它理解为「不推理」；若你的接口忽略或拒绝它，生成后会提示",
   "thinkingDisabled": "不禁用",
   "thinkingCustom": "自定义",
