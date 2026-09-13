@@ -7,10 +7,34 @@
  */
 
 /**
- * 关闭推理过程的请求体附加字段，选中后并入请求体顶层。
+ * 关闭推理的请求体字段。
+ *
+ * reasoning_effort 是 OpenAI 官方 Chat Completions 的参数本身，不是厂商扩展，
+ * 这是它区别于下面那些字段的地方：DeepSeek、Ollama、Gemini 2.5 系、GLM、
+ * qwen3.8-max、OpenRouter 都把 "none" 解释为不推理。
+ *
+ * 但它不是万能钥匙，两点限制写在这里免得后来者再踩：
+ * 1. 一贯思考的模型关不掉（Gemini 2.5 Pro / 3 系、qwen3.7-max-preview 之类）；
+ * 2. 严格的端点对不认识的参数直接返回 400（OpenAI 官方自己就是，GPT-6 Astra 连
+ *    "none" 都拒绝）—— top_k 留空不发是同一个道理。
+ */
+export const REASONING_EFFORT_FIELD = "reasoning_effort";
+export const REASONING_EFFORT_OFF = "none";
+
+/**
+ * 已弃用：旧版让用户从一串 JSON 片段里挑一条并入请求体顶层。
+ *
+ * 撤出界面是因为它没法可靠工作：
+ * - `{"extra_body": {...}}` 在原始 HTTP 下**永远不生效**。extra_body 只是 Python SDK
+ *   的包装，SDK 会在发送前把它的内容并到请求体顶层；插件直接发 HTTP，供应商只会
+ *   看到一个名叫 extra_body 的陌生字段然后静默忽略。用户以为关了思考，实际没关。
+ * - 其余几条各只对一个供应商有效，选错时同样没有任何反馈。
+ *
+ * 代码保留未删（含 client 的 thinkingFields），但新配置不再写入这些字段，
+ * 读到旧配置时由 mergeSettings 折算成 suppressReasoning。
  *
  * 每一项都必须是**完整的 JSON 对象文本**：client 拿到后直接 JSON.parse。
- * 早期版本把这里写成了 `"key": value` 片段，parse 必然抛错，
+ * 更早期版本把这里写成了 `"key": value` 片段，parse 必然抛错，
  * 于是除「不禁用」外每一个预设都会让请求当场失败。
  */
 export const THINKING_DISABLED = "disabled";
@@ -42,9 +66,11 @@ export interface ApiSettings {
     baseURL: string;
     apiKey: string;
     model: string;
-    /** THINKING_PRESETS 中的一项，或 THINKING_CUSTOM。 */
+    /** 关闭推理：开启后请求体带上 reasoning_effort: "none"。 */
+    suppressReasoning: boolean;
+    /** @deprecated 旧版的 JSON 片段下拉取值，已撤出界面，仅用于读旧配置。 */
     disableThinking: string;
-    /** 选中 THINKING_CUSTOM 时生效的 JSON 对象文本。 */
+    /** @deprecated 配合 disableThinking 的自定义 JSON，已撤出界面。 */
     customThinking: string;
     temperature: number;
     /** 留空表示不发送 top_p。 */
@@ -121,6 +147,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
         baseURL: "",
         apiKey: "",
         model: "",
+        suppressReasoning: false,
         disableThinking: THINKING_DISABLED,
         customThinking: "",
         temperature: 1.0,
@@ -163,10 +190,17 @@ export function mergeSettings(stored: unknown): PluginSettings {
     }
     const raw = stored as Partial<PluginSettings>;
     const api = {...DEFAULT_SETTINGS.api, ...(raw.api ?? {})};
-    // 早期版本在这里存的是 JSON 片段，已经发不出去，回落到「不禁用」而不是让它继续报错
-    if (!isValidThinkingPreset(api.disableThinking)) {
-        api.disableThinking = DEFAULT_SETTINGS.api.disableThinking;
+    // 旧下拉已撤出界面并弃用，这里把旧字段一律清掉 —— 弃用意味着不再发送，
+    // 而不是留着它继续拼进请求体（那些字段要么永远不生效，要么只对一个供应商有效，
+    // 具体见 THINKING_PRESETS 的注释）。用户本来「想关掉思考」的意图折算进新开关，
+    // 只在没存过 suppressReasoning 时推导一次，之后以新界面上的选择为准。
+    if (typeof (raw.api as Partial<ApiSettings> | undefined)?.suppressReasoning !== "boolean") {
+        // 更早期版本存的是 `"key": value` 片段，那种解析不了，按「不禁用」处理
+        api.suppressReasoning = isValidThinkingPreset(api.disableThinking) &&
+            api.disableThinking !== THINKING_DISABLED;
     }
+    api.disableThinking = DEFAULT_SETTINGS.api.disableThinking;
+    api.customThinking = "";
     return {
         api,
         behavior: {...DEFAULT_SETTINGS.behavior, ...(raw.behavior ?? {})},

@@ -11,6 +11,8 @@ import {fetchSyncPost} from "siyuan";
 import {
     chatCompletionsURL,
     modelsURL,
+    REASONING_EFFORT_FIELD,
+    REASONING_EFFORT_OFF,
     THINKING_CUSTOM,
     THINKING_DISABLED,
     type ApiSettings,
@@ -30,8 +32,18 @@ export interface ChatParams {
     user: string;
 }
 
+/** 一次响应里模型仍然产生的推理痕迹。 */
+export interface ReasoningTrace {
+    /** 思维链文本，供应商把它放在 message 里时取到；只报数不返文本时为空串。 */
+    text: string;
+    /** 供应商自报的推理 token 数，只有 OpenAI 形状的 usage 才给得出。 */
+    tokens: number | undefined;
+}
+
 export interface ChatResult {
     text: string;
+    /** 本次响应里仍带有推理内容时的痕迹，没有则为 undefined。 */
+    reasoning?: ReasoningTrace;
 }
 
 export class ApiError extends Error {
@@ -50,10 +62,28 @@ export class ApiError extends Error {
 export const EMPTY_CONTENT = "EMPTY_CONTENT";
 
 /**
- * 解析「是否禁用思考」下拉的取值。预设项本身就是一段 JSON 对象文本，直接并入请求体顶层；
- * 自定义项由用户填写任意 JSON 对象，格式不合法时抛错而不是静默忽略。
+ * 关闭推理的请求体字段。
+ *
+ * 这是唯一一处写 reasoning_effort 的地方，理由见 config.ts 的 REASONING_EFFORT_FIELD。
+ * 副作用是：供应商若不认这个参数且不容忍未知字段，会直接 400。
+ * 那种情况用户是能看见的（报错原文会原样展示），比下面 thinkingFields 那种
+ * 「发出去、被静默忽略、看起来一切正常」的失败好得多。
  */
-function thinkingFields(api: ApiSettings): Record<string, unknown> {
+function reasoningFields(api: ApiSettings): Record<string, unknown> {
+    return api.suppressReasoning ? {[REASONING_EFFORT_FIELD]: REASONING_EFFORT_OFF} : {};
+}
+
+/**
+ * @deprecated 旧版「从 JSON 片段里挑一条」的取值解析。已撤出界面，且**不再调用**。
+ *
+ * 单独留在这里而不是删掉：恢复旧下拉时把它加回 buildPayload 那一行即可。
+ * 之所以要摘掉调用，是因为这两条路径并存时，请求体里发什么取决于两个地方
+ * （mergeSettings 负责清旧值、buildPayload 负责拼字段），而 extra_body 那个
+ * 静默失效的 bug 正是这样活下来的。现在只有 reasoningFields 一个出口。
+ *
+ * 导出是为了让它不被 noUnusedLocals 判成死代码。
+ */
+export function thinkingFields(api: ApiSettings): Record<string, unknown> {
     const raw = api.disableThinking === THINKING_CUSTOM ? api.customThinking : api.disableThinking;
     if (!raw || raw === THINKING_DISABLED) {
         return {};
@@ -98,7 +128,7 @@ export function buildPayload(
         // max_tokens 已被 OpenAI 标记废弃，但大量兼容服务只认它，所以留好回退路径。
         payload[useMaxCompletionTokens ? "max_completion_tokens" : "max_tokens"] = api.maxTokens;
     }
-    return Object.assign(payload, thinkingFields(api));
+    return Object.assign(payload, reasoningFields(api));
 }
 
 /** 该错误是否表示「不认识 max_completion_tokens」，需要改用 max_tokens 重发。 */
@@ -278,7 +308,7 @@ export async function chat(
         const text = extractContent(response.body);
         debugModelText(text);
         if (text !== "") {
-            return {text};
+            return {text, reasoning: reasoningTrace(response.body)};
         }
         // 返回体合法但没有文本，多半是推理耗尽了输出预算，重发无意义
         debugError("Response contained no text", response.body.slice(0, 500));
@@ -296,6 +326,38 @@ interface ChatCompletionResponse {
             reasoning?: string | null;
         };
     }[];
+    usage?: {
+        completion_tokens_details?: {reasoning_tokens?: number};
+    };
+}
+
+/**
+ * 这次响应里模型是否仍然产生了推理。
+ *
+ * 「请求成功、结果也解析得出来」不等于「禁用思考生效了」：供应商不认那个字段时
+ * 通常会静默忽略，于是用户以为关掉了，实际每次都在为一个用不上的思维链付费和等待。
+ * 这是最难自查的一类失败，所以两条线索都查：
+ * DeepSeek 等把思维链放在 message.reasoning_content，
+ * OpenAI 则在 usage.completion_tokens_details.reasoning_tokens 里报数。
+ */
+export function reasoningTrace(body: string): ReasoningTrace | undefined {
+    let parsed: ChatCompletionResponse;
+    try {
+        parsed = JSON.parse(body) as ChatCompletionResponse;
+    } catch {
+        // 走到这里说明 extractContent 已经抛过了，这里只是防御
+        return undefined;
+    }
+
+    const message = parsed.choices?.[0]?.message;
+    const text = [message?.reasoning_content, message?.reasoning]
+        .find((candidate): candidate is string => typeof candidate === "string" && candidate.trim() !== "")
+        ?.trim() ?? "";
+
+    const reported = parsed.usage?.completion_tokens_details?.reasoning_tokens;
+    const tokens = typeof reported === "number" && reported > 0 ? reported : undefined;
+
+    return text === "" && tokens === undefined ? undefined : {text, tokens};
 }
 
 /**
@@ -357,8 +419,7 @@ export async function testConnection(api: ApiSettings, behavior: BehaviorSetting
         {
             ...api,
             // 测试不注入思考参数，避免把「参数不被支持」误判成「连不上」
-            disableThinking: THINKING_DISABLED,
-            customThinking: "",
+            suppressReasoning: false,
             maxTokens: 16,
         },
         // 测试连接不重试，让问题立刻暴露

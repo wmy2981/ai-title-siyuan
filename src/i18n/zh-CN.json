@@ -30,7 +30,7 @@
   "importEmpty": "思源设置里没有已填写 API Key 的 AI 供应商。",
 
   "disableThinking": "是否禁用思考",
-  "disableThinkingDesc": "向请求体附加字段以关闭部分模型的推理过程。不确定时保持「不禁用」",
+  "disableThinkingDesc": "请求体带上 reasoning_effort: \"none\"。多数接口把它理解为「不推理」；若你的接口忽略或拒绝它，生成后会提示",
   "thinkingDisabled": "不禁用",
   "thinkingCustom": "自定义",
 
@@ -117,6 +117,8 @@
   "summarySkipped": "已跳过：{list}",
   "summaryNotReturned": "{count} 篇未从模型获取到标题：{list}",
   "summaryBatchFailed": "{count} 个批次请求失败",
+  "reasoningStillOn": "禁用思考未生效：本次仍有 {tokens} 个推理 token",
+  "reasoningStillOnNoCount": "禁用思考未生效：本次仍返回了推理内容",
   "applyFailed": "{title}：{message}",
   "skippedEmpty": "{title}（内容为空）",
 

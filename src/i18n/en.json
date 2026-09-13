@@ -30,7 +30,7 @@
   "importEmpty": "No AI provider with an API key is configured in SiYuan settings.",
 
   "disableThinking": "Disable thinking",
-  "disableThinkingDesc": "Extra request body fields that turn off reasoning on some models. Leave on \"Do not disable\" if you are unsure",
+  "disableThinkingDesc": "Sends reasoning_effort: \"none\". Most endpoints read that as \"do not reason\"; if yours ignores or rejects it, a run reports that",
   "thinkingDisabled": "Do not disable",
   "thinkingCustom": "Custom",
 
@@ -117,6 +117,8 @@
   "summarySkipped": "Skipped: {list}",
   "summaryNotReturned": "{count} note(s) got no title from the model: {list}",
   "summaryBatchFailed": "{count} batch(es) failed",
+  "reasoningStillOn": "Disable thinking had no effect: {tokens} reasoning tokens were still spent",
+  "reasoningStillOnNoCount": "Disable thinking had no effect: the model still returned a reasoning trace",
   "applyFailed": "{title}: {message}",
   "skippedEmpty": "{title} (empty content)",
 

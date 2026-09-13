@@ -19,9 +19,6 @@ import {
     AUTO_APPLY_SINGLE,
     DEFAULT_SETTINGS,
     hasProviderConfig,
-    THINKING_CUSTOM,
-    THINKING_DISABLED,
-    THINKING_PRESETS,
     type AutoApply,
     type PluginSettings,
 } from "./config";
@@ -476,36 +473,18 @@ function buildApiGroup(root: HTMLElement, t: T, settings: PluginSettings): Sync 
     });
     rowItem(items, t("importFromSiyuan"), t("importFromSiyuanDesc"), importButton);
 
-    const thinking = select();
-    const thinkingLabels: Record<string, string> = {
-        [THINKING_DISABLED]: t("thinkingDisabled"),
-        [THINKING_CUSTOM]: t("thinkingCustom"),
-    };
-    for (const preset of THINKING_PRESETS) {
-        const option = document.createElement("option");
-        option.value = preset;
-        // 预设项直接展示实际会发送的 JSON，避免用户不知道选了会发什么
-        option.textContent = thinkingLabels[preset] ?? preset;
-        thinking.append(option);
-    }
-    const customThinking = textarea(2);
-    customThinking.placeholder = '{"enable_thinking": false}';
-    customThinking.addEventListener("input", () => {
-        api.customThinking = customThinking.value;
-    });
-    thinking.addEventListener("change", () => {
-        api.disableThinking = thinking.value;
-        customThinking.style.display = thinking.value === THINKING_CUSTOM ? "" : "none";
+    // 旧版这里是「从一串 JSON 片段里挑一条」的下拉，已撤出界面并弃用：
+    // 其中 {"extra_body": ...} 在原始 HTTP 下永远不生效（extra_body 只是 Python SDK 的
+    // 包装，SDK 发送前会把它拆开），其余几条各只对一个供应商有效，选错时还没有任何反馈。
+    // 现在只发 reasoning_effort: "none"，理由见 config.ts 的 REASONING_EFFORT_FIELD。
+    const reasoning = switchControl();
+    reasoning.addEventListener("change", () => {
+        api.suppressReasoning = reasoning.checked;
     });
     syncs.push(() => {
-        thinking.value = api.disableThinking;
-        customThinking.value = api.customThinking;
-        customThinking.style.display = api.disableThinking === THINKING_CUSTOM ? "" : "none";
+        reasoning.checked = api.suppressReasoning;
     });
-
-    const thinkingBox = document.createElement("div");
-    thinkingBox.append(thinking, customThinking);
-    stackItem(items, t("disableThinking"), t("disableThinkingDesc"), thinkingBox);
+    rowItem(items, t("disableThinking"), t("disableThinkingDesc"), reasoning);
 
     const temperature = numberInput(0.1);
     temperature.addEventListener("input", () => {
