@@ -2,6 +2,11 @@ import {defineConfig} from "vite";
 
 // 思源插件入口固定为包内根目录的 index.js，CSS 固定为 index.css；
 // siyuan 模块由宿主在运行时注入，必须保持 external。
+//
+// 产物必须是 CommonJS，不能是 ESM：宿主在 app/src/plugin/loader.ts 里把插件代码
+// 包进 (function anonymous(require, module, exports){...}) 再 window.eval，
+// require("siyuan") 由它注入。输出 ESM 会在第一行 import 处直接抛
+// SyntaxError: Cannot use import statement outside a module。
 export default defineConfig(({mode}) => ({
     build: {
         outDir: "dist",
@@ -11,7 +16,7 @@ export default defineConfig(({mode}) => ({
         sourcemap: mode !== "production",
         lib: {
             entry: "src/index.ts",
-            formats: ["es"],
+            formats: ["cjs"],
             fileName: () => "index.js",
             cssFileName: "index",
         },
