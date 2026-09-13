@@ -53,13 +53,11 @@ function button(className: string, text: string): HTMLButtonElement {
     return node;
 }
 
-/** 思源的开关控件需要 label 包裹，input 本身放在 label 内。 */
+/** 官方开关：b3-switch 必须落在 input 上，包一层 label 会同时画出原生复选框和畸形胶囊。 */
 function switchControl(): HTMLInputElement {
-    const label = document.createElement("label");
-    label.className = "fn__flex-center b3-switch";
     const input = document.createElement("input");
     input.type = "checkbox";
-    label.append(input);
+    input.className = "b3-switch fn__flex-center";
     return input;
 }
 
@@ -105,13 +103,16 @@ export function openGenerateDialog(options: GenerateDialogOptions): void {
     const dialog = new Dialog({
         title: t("dialogTitle"),
         width: "720px",
-        height: "70vh",
-        content: '<div class="b3-dialog__content"><div class="ai-title__dialog"></div></div>',
+        // 不固定高度：条目少时窗口就小，多时由 .ai-title__dialog 的 max-height 兜住。
+        // 页脚必须挂在 .b3-dialog__body 下：挂进 .b3-dialog__content 会跟着内容滚，
+        // 结果就是条目少时按钮浮在半空、下面留一大片空白。
+        content: '<div class="b3-dialog__content"><div class="ai-title__dialog"></div></div>' +
+            '<div class="b3-dialog__action"></div>',
     });
 
     const body = dialog.element.querySelector<HTMLElement>(".ai-title__dialog");
-    const contentRoot = body?.parentElement;
-    if (!body || !contentRoot) {
+    const action = dialog.element.querySelector<HTMLElement>(".b3-dialog__action");
+    if (!body || !action) {
         return;
     }
 
@@ -140,9 +141,8 @@ export function openGenerateDialog(options: GenerateDialogOptions): void {
         const checkbox = switchControl();
         checkbox.checked = generated;
 
+        // 这里显示的就是文档当前标题，与下面输入框里的 AI 标题构成对照，无需再重复一次
         const name = div("ai-title__row-name", info.title);
-        const original = div("ai-title__original", generated ? info.title : "");
-        original.title = info.title;
         const status = div("ai-title__row-status", generated ? "" : reasonText(t, result));
 
         const actions = div("fn__flex");
@@ -151,8 +151,9 @@ export function openGenerateDialog(options: GenerateDialogOptions): void {
 
         const input = document.createElement("input");
         input.className = "b3-text-field fn__block ai-title__title-input";
+        // 不放 placeholder：上一行已经写着当前标题，再显示一次是重复，
+        // 而失败行（输入框为空且禁用）正好会把这份重复露出来
         input.value = result.title ?? "";
-        input.placeholder = info.title;
         input.disabled = !generated;
 
         const row: Row = {id: result.id, result, checkbox, input, status, element: rowElement};
@@ -171,7 +172,6 @@ export function openGenerateDialog(options: GenerateDialogOptions): void {
                 checkbox.checked = ok;
                 rowElement.classList.toggle("ai-title__row--failed", !ok);
                 status.textContent = ok ? "" : reasonText(t, next);
-                original.textContent = ok ? info.title : "";
                 updateCounter();
             } catch (error) {
                 status.textContent = error instanceof Error ? error.message : String(error);
@@ -190,13 +190,12 @@ export function openGenerateDialog(options: GenerateDialogOptions): void {
             rowElement.classList.add("ai-title__row--failed");
         }
 
-        head.append(checkbox.parentElement ?? checkbox, name, original, actions);
+        head.append(checkbox, name, actions);
         rowElement.append(head, input, status);
         body.append(rowElement);
         rows.push(row);
     }
 
-    const footer = div("b3-dialog__action");
     const selectAll = button("b3-button b3-button--text", t("selectAll"));
     const selectNone = button("b3-button b3-button--text", t("selectNone"));
     const spacer = div("ai-title__footer-spacer");
@@ -242,8 +241,7 @@ export function openGenerateDialog(options: GenerateDialogOptions): void {
         reportApplied(t, outcome.applied.length);
     });
 
-    footer.append(selectAll, selectNone, spacer, cancel, apply);
-    contentRoot.append(footer);
+    action.append(selectAll, selectNone, spacer, cancel, apply);
     updateCounter();
 }
 

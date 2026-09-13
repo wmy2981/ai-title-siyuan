@@ -60,19 +60,6 @@
         font-size: 12px;
     }
 
-    &__original {
-        color: var(--b3-theme-on-surface-variant, var(--b3-theme-on-surface));
-        opacity: 0.6;
-        font-size: 12px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-
-        &::before {
-            content: "→ ";
-        }
-    }
-
     &__title-input {
         width: 100%;
     }
