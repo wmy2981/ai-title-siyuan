@@ -6,17 +6,28 @@
  * 这样旧版本存下的配置在新增字段后依然可用。
  */
 
-/** 关闭推理过程的请求体附加字段。发送时直接合并进请求体顶层。 */
+/**
+ * 关闭推理过程的请求体附加字段，选中后并入请求体顶层。
+ *
+ * 每一项都必须是**完整的 JSON 对象文本**：client 拿到后直接 JSON.parse。
+ * 早期版本把这里写成了 `"key": value` 片段，parse 必然抛错，
+ * 于是除「不禁用」外每一个预设都会让请求当场失败。
+ */
 export const THINKING_DISABLED = "disabled";
 export const THINKING_CUSTOM = "custom";
 export const THINKING_PRESETS = [
     THINKING_DISABLED,
-    '"enable_thinking": false',
-    '"extra_body": {"enable_thinking": false}',
-    '"chat_template_kwargs": {"enable_thinking": false}',
-    '"thinking": {"type": "disabled"}',
+    '{"enable_thinking": false}',
+    '{"extra_body": {"enable_thinking": false}}',
+    '{"chat_template_kwargs": {"enable_thinking": false}}',
+    '{"thinking": {"type": "disabled"}}',
     THINKING_CUSTOM,
 ] as const;
+
+/** 判断某个取值是否是下拉里的合法预设。 */
+function isValidThinkingPreset(value: string): boolean {
+    return (THINKING_PRESETS as readonly string[]).includes(value);
+}
 
 export const AUTO_APPLY_NEVER = "never";
 export const AUTO_APPLY_SINGLE = "single";
@@ -151,8 +162,13 @@ export function mergeSettings(stored: unknown): PluginSettings {
         return structuredClone(DEFAULT_SETTINGS);
     }
     const raw = stored as Partial<PluginSettings>;
+    const api = {...DEFAULT_SETTINGS.api, ...(raw.api ?? {})};
+    // 早期版本在这里存的是 JSON 片段，已经发不出去，回落到「不禁用」而不是让它继续报错
+    if (!isValidThinkingPreset(api.disableThinking)) {
+        api.disableThinking = DEFAULT_SETTINGS.api.disableThinking;
+    }
     return {
-        api: {...DEFAULT_SETTINGS.api, ...(raw.api ?? {})},
+        api,
         behavior: {...DEFAULT_SETTINGS.behavior, ...(raw.behavior ?? {})},
         ui: {...DEFAULT_SETTINGS.ui, ...(raw.ui ?? {})},
     };
