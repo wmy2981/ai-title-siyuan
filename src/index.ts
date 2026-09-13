@@ -81,12 +81,14 @@ export default class AiTitlePlugin extends Plugin {
         this.settings = mergeSettings(stored);
         setDebug(this.settings.ui.debug);
 
-        // 首次运行时标题语言跟随思源界面语言，之后以用户设置为准
+        // 首次运行时标题语言跟随思源界面语言，之后以用户设置为准。
+        // 这里刻意不回写：loadData 读失败时返回空值，与真正的首次运行无法区分，
+        // 一旦把它当成首次运行写回默认值，用户已存的配置就被覆盖掉了。
+        // 代价只是在用户第一次保存之前，每次加载都要重新推导一次，结果相同。
         if (!stored) {
             this.settings.behavior.titleLanguage = defaultTitleLanguage(
                 (window as unknown as {siyuan?: {config?: {lang?: string}}}).siyuan?.config?.lang ?? "en",
             );
-            await this.saveData(STORAGE_NAME, this.settings);
         }
         debug(`Settings loaded (debug mode on)`);
     }
