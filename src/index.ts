@@ -18,7 +18,7 @@ import {
 import {getDocTitle} from "./content";
 import {debug, setDebug} from "./debug";
 import {makeT, type T} from "./i18n";
-import {generateTitles, type NoteResult} from "./pipeline";
+import {generateTitles, type GenerateOutcome, type NoteResult} from "./pipeline";
 import {openSettingsPanel} from "./settings-panel";
 import {ICON_ID, ICON_SVG} from "./icons";
 import "./index.scss";
@@ -238,6 +238,7 @@ export default class AiTitlePlugin extends Plugin {
                 },
             });
             hideMessage(PROGRESS_ID);
+            this.reportIneffectiveReasoning(outcome.reasoning);
             await this.handleOutcome(ids, outcome.results, outcome.batchErrors);
         } catch (error) {
             hideMessage(PROGRESS_ID);
@@ -281,6 +282,27 @@ export default class AiTitlePlugin extends Plugin {
             api: this.settings.api,
             behavior: this.settings.behavior,
         });
+    }
+
+    /**
+     * 开了「禁用思考」、模型却仍在推理时提示一次。
+     *
+     * 这类失败不会以报错的形式出现 —— 供应商不认那个字段时通常静默忽略，
+     * 请求照样成功，只是每次都在为一个用不上的思维链多付 token 和等待。
+     * 所以这里必须主动说，否则用户没有任何办法发现开关是空的。
+     */
+    private reportIneffectiveReasoning(reasoning: GenerateOutcome["reasoning"]): void {
+        if (!reasoning) {
+            return;
+        }
+        debug(`Disable thinking had no effect in ${reasoning.batches} batch(es), ${reasoning.tokens ?? "?"} reasoning token(s)`);
+        showMessage(
+            reasoning.tokens === undefined
+                ? this.t("reasoningStillOnNoCount")
+                : this.t("reasoningStillOn", {tokens: reasoning.tokens}),
+            12000,
+            "error",
+        );
     }
 
     /** 取每篇笔记当前的标题，用于确认窗口里的对比展示与提示文案。 */

@@ -4,7 +4,7 @@
  * 并发上限只限制同时在飞的请求数，超出的批次排队，某个批次一返回就补位。
  * 单个批次失败不影响其他批次，最终统一汇总，避免一篇笔记拖垮整次操作。
  */
-import {chat, EMPTY_CONTENT} from "./api/client";
+import {chat, EMPTY_CONTENT, type ReasoningTrace} from "./api/client";
 import {extractTitles} from "./api/json";
 import {fetchNoteContent, type NoteContent} from "./content";
 import type {ApiSettings, BehaviorSettings} from "./config";
@@ -36,6 +36,11 @@ export interface GenerateOutcome {
     results: NoteResult[];
     /** 失败批次的错误信息，用于汇总提示。 */
     batchErrors: string[];
+    /**
+     * 设了禁用思考、模型却仍在推理的痕迹。
+     * 只在开了开关时才可能非空 —— 没开的时候模型推理是预期行为，不值得提示。
+     */
+    reasoning?: {batches: number; tokens: number | undefined};
 }
 
 export interface GenerateOptions {
@@ -82,21 +87,29 @@ async function generateBatch(
     batch: NoteContent[],
     api: ApiSettings,
     behavior: BehaviorSettings,
-): Promise<NoteResult[]> {
+): Promise<{results: NoteResult[]; reasoning?: ReasoningTrace}> {
     const {system, user} = renderPrompt(batch, behavior);
     const result = await chat({system, user}, api, behavior);
+    // 解析失败也要把推理痕迹带出去：模型一边推理一边漏答，恰恰是最该提示的情况
+    const reasoning = result.reasoning;
 
     let titles: Map<string, string>;
     try {
         titles = extractTitles(result.text, batch.map((note) => note.id));
     } catch (error) {
-        return batch.map((note) => ({id: note.id, reason: "parseFailed" as const, message: messageOf(error)}));
+        return {
+            results: batch.map((note) => ({id: note.id, reason: "parseFailed" as const, message: messageOf(error)})),
+            reasoning,
+        };
     }
 
-    return batch.map((note) => {
-        const title = titles.get(note.id);
-        return title === undefined ? {id: note.id, reason: "notReturned" as const} : {id: note.id, title};
-    });
+    return {
+        results: batch.map((note) => {
+            const title = titles.get(note.id);
+            return title === undefined ? {id: note.id, reason: "notReturned" as const} : {id: note.id, title};
+        }),
+        reasoning,
+    };
 }
 
 /** 汇总一个批次的产出，便于在 console 里核对 id 对应关系。 */
@@ -118,6 +131,8 @@ export async function generateTitles(options: GenerateOptions): Promise<Generate
     if (ids.length === 0) {
         return {results: [], batchErrors: []};
     }
+    // 没开开关时模型推理是预期行为，不必统计，也就不会提示
+    const watchReasoning = api.suppressReasoning;
 
     const contents = await loadContents(ids, behavior.contentLimit);
 
@@ -142,6 +157,9 @@ export async function generateTitles(options: GenerateOptions): Promise<Generate
     );
     onProgress?.(done, batches.length);
 
+    let reasoningBatches = 0;
+    let reasoningTokens: number | undefined;
+
     // 固定并发数的协程池：每个 worker 从共享游标取下一个批次，取完即退出
     let cursor = 0;
     const concurrency = Math.max(1, Math.min(behavior.concurrency, batches.length));
@@ -154,9 +172,15 @@ export async function generateTitles(options: GenerateOptions): Promise<Generate
                 }
                 const batch = batches[index];
                 try {
-                    const batchResults = await generateBatch(batch, api, behavior);
-                    debugResults(index, batchResults);
-                    results.push(...batchResults);
+                    const outcome = await generateBatch(batch, api, behavior);
+                    debugResults(index, outcome.results);
+                    results.push(...outcome.results);
+                    if (watchReasoning && outcome.reasoning) {
+                        reasoningBatches++;
+                        if (outcome.reasoning.tokens !== undefined) {
+                            reasoningTokens = (reasoningTokens ?? 0) + outcome.reasoning.tokens;
+                        }
+                    }
                 } catch (error) {
                     const message = messageOf(error);
                     debugError(`Batch ${index + 1}/${batches.length} failed`, error);
@@ -174,6 +198,7 @@ export async function generateTitles(options: GenerateOptions): Promise<Generate
     return {
         results: ids.map((id) => byId.get(id) ?? {id, reason: "notReturned"}),
         batchErrors,
+        reasoning: reasoningBatches > 0 ? {batches: reasoningBatches, tokens: reasoningTokens} : undefined,
     };
 }
 

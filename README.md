@@ -85,18 +85,18 @@ Selecting more than one note **always** opens the confirmation dialog, whichever
 
 ### Disabling reasoning
 
-Reasoning models can be slow, and some leave `content` empty while putting everything in a reasoning field. The **Disable thinking** dropdown sends extra request body fields to switch that off:
+Reasoning models can be slow, and some leave `content` empty while putting everything in a reasoning field. The **Disable thinking** switch adds `reasoning_effort: "none"` to the request body.
 
-| Option | What it sends |
-| --- | --- |
-| Do not disable | nothing |
-| *(preset)* | `{"enable_thinking": false}` |
-| *(preset)* | `{"extra_body": {"enable_thinking": false}}` |
-| *(preset)* | `{"chat_template_kwargs": {"enable_thinking": false}}` |
-| *(preset)* | `{"thinking": {"type": "disabled"}}` |
-| Custom | whatever JSON object you provide |
+That field is the one written into the protocol rather than invented by a vendor: `reasoning_effort` is an OpenAI Chat Completions parameter, and DeepSeek, Ollama, Gemini 2.5, GLM, qwen3.8-max and OpenRouter all read `none` as "do not reason".
 
-No single field disables reasoning everywhere, so pick the one your provider documents. If the provider does not recognise it, the plugin surfaces the error rather than silently dropping the field — a silently ignored option would leave you believing reasoning was off when it was not.
+It is not universal, and two cases cannot be turned off at all:
+
+- Models that always reason have no off setting (Gemini 2.5 Pro, Gemini 3, thinking-only Qwen models).
+- Strict endpoints reject unknown parameters with a 400 — OpenAI's own API does, and GPT-6 Astra refuses even `none`.
+
+You are told in both cases. When the switch is on and the model reasoned anyway — the response carried `reasoning_content`, or `usage` reported reasoning tokens — the run ends with a "disable thinking had no effect" notice.
+
+That notice matters because this failure is otherwise **silent**: the request succeeds, and you keep paying tokens and latency for a reasoning trace you never asked for.
 
 ## Usage
 
@@ -124,7 +124,7 @@ Enable **Debug mode** in the settings and open the console. It prints the full r
 | `HTTP 404` | Wrong base URL. Check the version segment against your provider's documentation. |
 | `HTTP 401` | Wrong or missing API key. |
 | `max_completion_tokens` in an error | Your provider only accepts `max_tokens`. The plugin retries with the right name automatically; seeing this twice means the retry also failed. |
-| `HTTP 400` mentioning an unknown parameter | A thinking-suppression preset that your provider rejects. Switch to **Do not disable** or pick another preset. |
+| `HTTP 400` mentioning an unknown parameter | Your provider rejects `reasoning_effort`. Turn off **Disable thinking**. |
 | The model returns nothing | Reasoning may have consumed the whole output budget. Raise **Max output tokens** or disable thinking. |
 | Titles not in the language you want | Change **Title language**. It defaults to your SiYuan interface language. |
 
