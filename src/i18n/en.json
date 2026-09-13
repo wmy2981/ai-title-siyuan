@@ -107,6 +107,7 @@
   "aiTitle": "Suggested",
   "regenerate": "Regenerate",
   "regenerating": "Regenerating…",
+  "regenerated": "Regenerated: {title}",
   "selectAll": "Select all",
   "selectNone": "Select none",
   "apply": "Apply",

@@ -10,6 +10,9 @@ import type {ApiSettings, BehaviorSettings} from "./config";
 import type {T} from "./i18n";
 import {regenerateTitle, type NoteResult} from "./pipeline";
 
+/** 重新生成的回执共用同一个 id：连点几行时后一条顶掉前一条，而不是堆满屏幕。 */
+const REGENERATE_ID = "ai-title-regenerate";
+
 export interface NoteInfo {
     id: string;
     /** 文档当前的标题，用于展示对比。 */
@@ -193,6 +196,11 @@ export function openGenerateDialog(options: GenerateDialogOptions): void {
                 rowElement.classList.toggle("ai-title__row--failed", !ok);
                 status.textContent = ok ? "" : reasonText(t, next);
                 updateCounter();
+                // 模型给出同一个标题时，界面上一丝变化都没有，看着像按钮没反应。
+                // 这里报一次，让「点过了、也回来了」有回执。
+                if (next.title !== undefined) {
+                    showMessage(t("regenerated", {title: next.title}), 4000, "info", REGENERATE_ID);
+                }
             } catch (error) {
                 status.textContent = error instanceof Error ? error.message : String(error);
             } finally {

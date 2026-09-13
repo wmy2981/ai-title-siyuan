@@ -107,6 +107,7 @@
   "aiTitle": "AI 标题",
   "regenerate": "重新生成",
   "regenerating": "重新生成中…",
+  "regenerated": "已重新生成：{title}",
   "selectAll": "全选",
   "selectNone": "全不选",
   "apply": "应用",
