@@ -1,6 +1,17 @@
 // 全部样式都挂在插件私有类名下，避免影响思源自身界面。
 // 颜色一律走思源的主题变量，保证跟随明暗主题。
 
+// 模型下拉挂在 body 下，不在 .ai-title-settings 里，所以单独写。
+// 菜单被撑到与输入框同宽后，内部过滤区要跟着放开——.b3-menu__filter 自带
+// min-width:260px / max-width:420px，不放开会把搜索框卡在中间。
+.b3-menu__filter.ai-title__model-filter {
+    min-width: 0;
+    max-width: none;
+    // 跟随菜单宽度；放开 max-width 后它会转而按内容撑开，反而把菜单顶宽
+    width: 100%;
+    box-sizing: border-box;
+}
+
 .ai-title {
     &__dialog {
         display: flex;

@@ -193,7 +193,7 @@ function openModelMenu(anchor: HTMLInputElement, models: string[], t: T, onPick:
     menu.addItem({
         iconHTML: "",
         type: "empty",
-        label: `<div class="fn__flex-column b3-menu__filter">
+        label: `<div class="fn__flex-column b3-menu__filter ai-title__model-filter">
     <input class="b3-text-field fn__block" placeholder="${escapeHtml(t("modelSearch"))}">
     <div class="fn__hr"></div>
     <div class="b3-list fn__flex-1 b3-list--background">
@@ -264,6 +264,11 @@ function openModelMenu(anchor: HTMLInputElement, models: string[], t: T, onPick:
     });
     const rect = anchor.getBoundingClientRect();
     menu.open({x: rect.left, y: rect.bottom, h: rect.height, w: rect.width});
+    // Menu.open 的 w 只参与水平溢出修正，宽度实际由内容决定。思源那边的模型输入框只有
+    // 二百来像素，窄面板不显眼；这里是整行铺满的输入框，菜单必须跟着同宽才不显得脱节。
+    // border-box：.b3-menu 默认 content-box，直接给 width 会再叠上内边距
+    menu.element.style.boxSizing = "border-box";
+    menu.element.style.width = `${rect.width}px`;
 }
 
 function parseNumber(raw: string, fallback: number): number {
