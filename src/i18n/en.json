@@ -2,35 +2,34 @@
   "pluginName": "AI Title",
 
   "groupApi": "API configuration",
-  "groupApiDesc": "Connection to an OpenAI-compatible chat completions endpoint",
   "groupBehavior": "Behavior",
-  "groupBehaviorDesc": "Request limits, title application and prompts",
   "groupUi": "Interface",
-  "groupUiDesc": "Where the generate button appears, and prompt templates",
 
   "protocol": "Protocol",
   "protocolChatCompletions": "Chat Completions API",
-  "protocolDesc": "Only the Chat Completions protocol is implemented for now",
+  "protocolDesc": "Only this protocol is implemented for now",
 
   "baseUrl": "Base URL",
-  "baseUrlDesc": "Include the version segment your provider documents, e.g. https://api.openai.com/v1, https://api.deepseek.com, https://open.bigmodel.cn/api/paas/v4",
+  "baseUrlDesc": "Include the version segment your provider documents, e.g. https://api.openai.com/v1",
 
   "apiKey": "API Key",
   "apiKeyDesc": "Sent as the Authorization: Bearer header. Leave empty if your endpoint needs no key",
 
   "modelName": "Model",
-  "modelNameDesc": "Type a model name, or fetch the list from the provider endpoint",
+  "modelNameDesc": "Type a model name, or pick one with Fetch models",
   "fetchModels": "Fetch models",
   "fetchModelsLoading": "Fetching…",
   "modelPlaceholder": "e.g. gpt-4o-mini",
+  "modelSearch": "Search models…",
+  "modelEmpty": "No matching model",
 
   "importFromSiyuan": "Import from SiYuan",
-  "importFromSiyuanDesc": "Copy base URL, API key and model from one of the providers configured in SiYuan settings. The plugin keeps its own copy afterwards, so later changes in SiYuan do not affect it",
+  "importFromSiyuanDesc": "Copy the base URL, API key and model from a provider already configured in SiYuan. The plugin keeps its own copy afterwards",
   "importDialogTitle": "Import provider configuration",
   "importEmpty": "No AI provider with an API key is configured in SiYuan settings.",
 
   "disableThinking": "Disable thinking",
-  "disableThinkingDesc": "Extra request body fields that turn off reasoning on some models. Leave on \"Do not disable\" if you are unsure, or use a custom JSON object",
+  "disableThinkingDesc": "Extra request body fields that turn off reasoning on some models. Leave on \"Do not disable\" if you are unsure",
   "thinkingDisabled": "Do not disable",
   "thinkingCustom": "Custom",
 
@@ -39,14 +38,14 @@
   "topP": "Top P",
   "topPDesc": "0 to 1. Leave empty to omit",
   "topK": "Top K",
-  "topKDesc": "Left empty the field is not sent, which is required by the official OpenAI API. Only some providers accept it",
+  "topKDesc": "Left empty the field is not sent, which the official OpenAI API requires. Only some providers accept it",
   "maxTokens": "Max output tokens",
-  "maxTokensDesc": "Upper bound for one response. Sent as max_completion_tokens, falling back to max_tokens when the provider rejects it",
+  "maxTokensDesc": "Upper bound for one response. Sent as max_completion_tokens, falling back to max_tokens when rejected",
 
   "timeout": "Timeout (ms)",
   "timeoutDesc": "Timeout for each API request. Batches run concurrently, so this is not a budget shared by the whole operation",
   "retries": "Retries",
-  "retriesDesc": "Retried only on rate limits, server errors, timeouts and network failures. Other errors fail immediately",
+  "retriesDesc": "Retried only on rate limits, server errors, timeouts and network failures",
   "contentLimit": "Note content limit (characters)",
   "contentLimitDesc": "Each note is truncated to this length on its own, keeping the beginning",
   "batchSize": "Notes per request",
@@ -55,7 +54,7 @@
   "concurrencyDesc": "How many batches may be in flight at once. Lower it if your provider rate limits",
 
   "autoApply": "Apply titles automatically",
-  "autoApplyDesc": "When disabled, a dialog lets you review and edit every title before it is written",
+  "autoApplyDesc": "Disabled reviews every title first; single note applies directly; always applies everything directly",
   "autoApplyNever": "Disabled",
   "autoApplySingle": "Single note only",
   "autoApplyAlways": "Always",
@@ -70,7 +69,6 @@
   "systemPromptDesc": "Hard requirements, above all that the model returns a single raw JSON object",
   "userPrompt": "User prompt",
   "userPromptDesc": "The task and its preferences. Placeholders: {{content}}, {{language}}, {{style}}",
-  "promptPlaceholders": "Available placeholders: {{content}}, {{language}}, {{style}}",
 
   "showTopBar": "Show toolbar button",
   "showTopBarDesc": "Adds a generate button to the top bar",
@@ -79,12 +77,16 @@
   "showDocTreeMenu": "Show document tree menu item",
   "showDocTreeMenuDesc": "Adds a generate entry to the document tree right-click menu",
   "debugMode": "Debug mode",
-  "debugModeDesc": "Logs the full conversation JSON and every pipeline step to the console. Turn off when you are done",
+  "debugModeDesc": "Logs the full conversation JSON and every pipeline step to the console",
+
+  "save": "Save",
+  "cancel": "Cancel",
+  "saveFailed": "Save failed: {message}",
 
   "testConnection": "Test connection",
-  "testConnectionDesc": "Sends a minimal request that asks the model to reply with \"hi\". Any reply means the configuration works",
+  "testConnectionDesc": "Sends a minimal request asking the model to reply \"hi\". Any reply means the configuration works",
   "testRunning": "Testing…",
-  "testNoConfig": "Fill in the base URL, API key and model name first",
+  "testNoConfig": "Fill in the base URL and model name first",
   "testOk": "Connection OK — model replied \"{reply}\" in {elapsed} ms",
   "testFailed": "Connection failed: {message}",
 
@@ -109,7 +111,6 @@
   "selectNone": "Select none",
   "apply": "Apply",
   "applyCount": "Apply ({count})",
-  "cancel": "Cancel",
 
   "summarySuccess": "Applied {count} title(s)",
   "summaryFailed": "Failed: {list}",

@@ -115,3 +115,33 @@
         word-break: break-all;
     }
 }
+
+// ---- 设置面板 ----
+// 分组结构直接复用思源设置页的 .config / .config-title / .config-items，
+// 这里只补两处那套规则在对话框里不合用的地方。
+.ai-title-settings {
+    // 设置页里首个标题的上边距由外层容器让位，对话框自带 16px padding，去掉重复的一份
+    > .config-title:first-child {
+        margin-top: 4px;
+    }
+
+    // 组合控件：输入框占满剩余宽度，按钮跟在后面
+    &__field-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+
+        > .b3-text-field {
+            flex: 1;
+            min-width: 200px;
+        }
+    }
+
+    // 提示词文本域随内容伸缩，但别拖成一整屏
+    textarea.b3-text-field {
+        resize: vertical;
+        min-height: 72px;
+        max-height: 320px;
+    }
+}

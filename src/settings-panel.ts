@@ -1,13 +1,16 @@
 /**
  * 设置面板。
  *
- * 思源的 Setting 类每项只能放一个 HTMLElement，也没有内建的逐项保存，
- * 所以每个控件都直接读写传入的 settings 对象，最后由 confirmCallback 统一落盘。
+ * 用 Dialog 而不是 Setting：Setting.addItem 只能把一个控件塞进一行，表达不了分组，
+ * 分组标题会长得和普通设置项一模一样。这里按思源设置页自己的标记结构产出内容
+ * （`.config` > `.config-title` + `.config-items`），直接复用那套样式规则；
+ * 保存/取消按钮的搭法照抄 Setting 的实现，所以外观与行为一致。
  *
- * 「从思源导入」会批量改写配置，因此各分组返回一个 refresh 回调，
- * 而不是去猜哪些控件需要同步。
+ * 控件只绑事件、不写初值：初值统一由各组返回的 sync 写入，
+ * 与「导入后重刷」共用同一条路径。漏掉开头那次 sync 会让面板一律显示空白——
+ * 存进去的配置看上去就像根本没保存成功。
  */
-import {Dialog, Setting, showMessage} from "siyuan";
+import {Dialog, Menu, showMessage} from "siyuan";
 import {listModels, testConnection} from "./api/client";
 import {
     AUTO_APPLY_ALWAYS,
@@ -40,19 +43,92 @@ interface SiyuanProvider {
     models?: ProviderModel[];
 }
 
-type Refresh = () => void;
+/** 把配置写回本组各控件。导入会整体替换接口配置，届时需要重跑。 */
+type Sync = () => void;
 
-function input(className = "b3-text-field fn__block"): HTMLInputElement {
+/**
+ * 分组容器：与思源设置页同构（.config > .config-title + .config-items）。
+ * 必须挂在 .config 之下，否则这些规则不生效。
+ */
+function createGroup(root: HTMLElement, title: string): HTMLElement {
+    const heading = document.createElement("div");
+    heading.className = "config-title";
+    heading.textContent = title;
+
+    const items = document.createElement("div");
+    items.className = "config-items";
+
+    root.append(heading, items);
+    return items;
+}
+
+/** 设置项的标题与说明，两种布局共用。 */
+function labelBlock(title: string, description: string): HTMLElement {
+    const box = document.createElement("div");
+    const name = document.createElement("div");
+    name.className = "config-name";
+    name.textContent = title;
+    box.append(name);
+    if (description !== "") {
+        const text = document.createElement("div");
+        text.className = "b3-label__text";
+        text.textContent = description;
+        box.append(text);
+    }
+    return box;
+}
+
+/**
+ * 左标题右控件。
+ * 开关交给思源自己渲染：Setting 见到含 b3-switch 的行会把它变成 label，
+ * 整行可点即可切换；其余控件补 fn__size200 保持设置页统一的控件宽度。
+ */
+function rowItem(items: HTMLElement, title: string, description: string, field: HTMLElement): void {
+    const isSwitch = field.classList.contains("b3-switch");
+    const row = document.createElement(isSwitch ? "label" : "div");
+    row.className = "fn__flex b3-label config-item";
+
+    const main = labelBlock(title, description);
+    main.classList.add("fn__flex-1");
+
+    const space = document.createElement("span");
+    space.className = "fn__space";
+
+    field.classList.add("fn__flex-center");
+    if (!isSwitch) {
+        field.classList.add("fn__size200");
+    }
+
+    row.append(main, space, field);
+    items.append(row);
+}
+
+/** 标题在上、控件占满整行。文本域和「下拉 + 附加输入」这类组合控件用这个。 */
+function stackItem(items: HTMLElement, title: string, description: string, field: HTMLElement): void {
+    const row = document.createElement("div");
+    row.className = "b3-label config-item";
+
+    const block = document.createElement("div");
+    block.className = "fn__block";
+
+    const space = document.createElement("div");
+    space.className = "fn__hr";
+
+    field.classList.add("fn__block");
+    block.append(labelBlock(title, description), space, field);
+    row.append(block);
+    items.append(row);
+}
+
+function input(className = "b3-text-field"): HTMLInputElement {
     const node = document.createElement("input");
     node.className = className;
-    node.style.minWidth = "260px";
     return node;
 }
 
 function select(): HTMLSelectElement {
     const node = document.createElement("select");
-    node.className = "b3-select fn__block";
-    node.style.minWidth = "260px";
+    node.className = "b3-select";
     return node;
 }
 
@@ -60,41 +136,134 @@ function textarea(rows: number): HTMLTextAreaElement {
     const node = document.createElement("textarea");
     node.className = "b3-text-field fn__block";
     node.rows = rows;
-    node.style.minWidth = "260px";
-    node.style.fontFamily = "var(--b3-font-family-code)";
     return node;
 }
 
-/** 思源的开关控件需要 label 包裹 input，这里返回可直接插入面板的 label。 */
-function switchControl(checked: boolean, onChange: (value: boolean) => void): HTMLElement {
-    const label = document.createElement("label");
-    label.className = "fn__flex-center b3-switch";
+/** 官方开关：b3-switch 必须落在 input 上，包一层 label 会同时画出原生复选框和畸形胶囊。 */
+function switchControl(): HTMLInputElement {
     const node = document.createElement("input");
     node.type = "checkbox";
-    node.checked = checked;
-    node.addEventListener("change", () => onChange(node.checked));
-    label.append(node);
-    return label;
+    node.className = "b3-switch fn__flex-center";
+    return node;
 }
 
-function numberInput(value: number | null, step: number | "any" = "any"): HTMLInputElement {
+function numberInput(step: number | "any" = "any"): HTMLInputElement {
     const node = input();
     node.type = "number";
     node.step = String(step);
-    node.value = value === null ? "" : String(value);
     return node;
 }
 
-function columnItem(setting: Setting, title: string, description: string, field: HTMLElement): void {
-    setting.addItem({title, description, direction: "column", actionElement: field});
+function escapeHtml(text: string): string {
+    return text.replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+    })[char] as string);
 }
 
-function rowItem(setting: Setting, title: string, description: string, field: HTMLElement): void {
-    setting.addItem({title, description, actionElement: field});
+/** 上下键在可见条目间移动高亮，跳过被搜索过滤掉的。 */
+function moveFocus(list: HTMLElement, event: KeyboardEvent): void {
+    const items = Array.from(list.querySelectorAll<HTMLElement>(".b3-list-item"))
+        .filter((item) => !item.classList.contains("fn__none"));
+    if (items.length === 0) {
+        return;
+    }
+    const current = items.findIndex((item) => item.classList.contains("b3-list-item--focus"));
+    const step = event.key === "ArrowDown" ? 1 : -1;
+    const next = items[(current + step + items.length) % items.length];
+    items.forEach((item) => item.classList.remove("b3-list-item--focus"));
+    next.classList.add("b3-list-item--focus");
+    next.scrollIntoView({block: "nearest"});
+    event.preventDefault();
+    event.stopPropagation();
 }
 
-function groupHeader(setting: Setting, title: string, description: string): void {
-    setting.addItem({title, description, direction: "column", actionElement: document.createElement("div")});
+/**
+ * 模型选择器：点输入框弹出可搜索的下拉。
+ *
+ * 取自思源 AI 设置里选模型的实现（config/tabs/ai/aiProviderUi.ts 的 openAvailableModelMenu），
+ * 那里用到的 upDownHint 与 escapeHTML 是应用内部工具，未随 SDK 导出，这里各写一份等价的。
+ * 用 Menu 而不是 <select>：模型名允许任意填写，下拉只是省去手打的入口。
+ */
+function openModelMenu(anchor: HTMLInputElement, models: string[], t: T, onPick: (id: string) => void): void {
+    const menu = new Menu();
+    menu.addItem({
+        iconHTML: "",
+        type: "empty",
+        label: `<div class="fn__flex-column b3-menu__filter">
+    <input class="b3-text-field fn__block" placeholder="${escapeHtml(t("modelSearch"))}">
+    <div class="fn__hr"></div>
+    <div class="b3-list fn__flex-1 b3-list--background">
+        ${models.map((model) => `<div class="b3-list-item b3-list-item--narrow" data-model="${escapeHtml(model)}">
+    <span class="b3-list-item__text">${escapeHtml(model)}</span>
+    ${model === anchor.value ? '<svg class="b3-menu__checked"><use xlink:href="#iconSelect"></use></svg>' : ""}
+</div>`).join("")}
+        <div class="b3-list--empty fn__none" data-type="empty">${escapeHtml(t("modelEmpty"))}</div>
+    </div>
+</div>`,
+        bind(element) {
+            const list = element.querySelector<HTMLElement>(".b3-list");
+            const search = element.querySelector<HTMLInputElement>("input");
+            const empty = element.querySelector<HTMLElement>("[data-type='empty']");
+            if (!list || !search || !empty) {
+                return;
+            }
+            const select = (item: HTMLElement) => {
+                const id = item.dataset.model ?? "";
+                onPick(id);
+                menu.close();
+                anchor.focus();
+            };
+            const filter = () => {
+                const keyword = search.value.toLowerCase().trim();
+                let first: HTMLElement | undefined;
+                list.querySelectorAll<HTMLElement>(".b3-list-item").forEach((item) => {
+                    item.classList.remove("b3-list-item--focus");
+                    const hidden = !(item.dataset.model ?? "").toLowerCase().includes(keyword);
+                    item.classList.toggle("fn__none", hidden);
+                    if (!hidden && !first) {
+                        first = item;
+                    }
+                });
+                first?.classList.add("b3-list-item--focus");
+                empty.classList.toggle("fn__none", first !== undefined);
+            };
+            filter();
+            search.addEventListener("keydown", (event: KeyboardEvent) => {
+                event.stopPropagation();
+                if (event.isComposing) {
+                    return;
+                }
+                if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                    moveFocus(list, event);
+                } else if (event.key === "Enter") {
+                    const item = list.querySelector<HTMLElement>(".b3-list-item--focus");
+                    if (item) {
+                        select(item);
+                    }
+                    event.preventDefault();
+                } else if (event.key === "Escape") {
+                    menu.close();
+                    anchor.focus();
+                    event.preventDefault();
+                }
+            });
+            search.addEventListener("input", () => {
+                filter();
+            });
+            list.addEventListener("click", (event) => {
+                const item = (event.target as HTMLElement).closest<HTMLElement>(".b3-list-item");
+                if (item) {
+                    select(item);
+                }
+            });
+        },
+    });
+    const rect = anchor.getBoundingClientRect();
+    menu.open({x: rect.left, y: rect.bottom, h: rect.height, w: rect.width});
 }
 
 function parseNumber(raw: string, fallback: number): number {
@@ -122,40 +291,75 @@ export interface SettingsPanelOptions {
     onSave: (next: PluginSettings) => Promise<void>;
 }
 
-/** 分组之间需要互相触发重刷：导入会整体替换接口配置。 */
-interface PanelContext {
-    t: T;
-    settings: PluginSettings;
-    setting: Setting;
-    refreshAll: () => void;
-}
-
 export function openSettingsPanel(options: SettingsPanelOptions): void {
     const {t} = options;
     // 复制一份，取消时不影响已保存的配置
     const settings: PluginSettings = structuredClone(options.settings);
 
-    const setting = new Setting({
-        confirmCallback: async () => {
-            await options.onSave(settings);
-        },
+    const dialog = new Dialog({
+        title: t("pluginName"),
+        // min() 让它在窄屏上自动收窄；桌面端就是 Setting 用的那个 768px
+        width: "min(768px, 92vw)",
+        // Setting 的默认高度，内容超出时由 .b3-dialog__content 滚动
+        height: "80vh",
+        content: '<div class="b3-dialog__content"><div class="config ai-title-settings"></div></div>' +
+            '<div class="b3-dialog__action"></div>',
     });
+    const root = dialog.element.querySelector<HTMLElement>(".ai-title-settings");
+    const action = dialog.element.querySelector<HTMLElement>(".b3-dialog__action");
+    if (!root || !action) {
+        dialog.destroy();
+        return;
+    }
 
-    const context: PanelContext = {t, settings, setting, refreshAll: () => undefined};
-    const refreshers: Refresh[] = [
-        buildApiGroup(context),
-        buildBehaviorGroup(context),
-        buildUiGroup(context),
+    const cancelButton = document.createElement("button");
+    cancelButton.className = "b3-button b3-button--cancel";
+    cancelButton.textContent = t("cancel");
+    cancelButton.addEventListener("click", () => dialog.destroy());
+
+    const space = document.createElement("div");
+    space.className = "fn__space";
+
+    const saveButton = document.createElement("button");
+    saveButton.className = "b3-button b3-button--text";
+    saveButton.textContent = t("save");
+    saveButton.addEventListener("click", async () => {
+        try {
+            await options.onSave(settings);
+        } catch (error) {
+            // 保存失败就不关窗，否则用户刚改的内容会跟着对话框一起消失
+            showMessage(
+                t("saveFailed", {message: error instanceof Error ? error.message : String(error)}),
+                12000,
+                "error",
+            );
+            return;
+        }
+        dialog.destroy();
+    });
+    action.append(cancelButton, space, saveButton);
+
+    const syncs = [
+        buildApiGroup(root, t, settings),
+        buildBehaviorGroup(root, t, settings),
+        buildUiGroup(root, t, settings),
     ];
-    context.refreshAll = () => refreshers.forEach((refresh) => refresh());
+    // 初值：与导入后的重刷走同一条路径，避免两处逻辑漂移
+    syncs.forEach((sync) => sync());
 
-    setting.open("ai-title-siyuan");
+    // 自己搭对话框就得自己补上 Setting.addItem 会替我们做的那个 Ctrl+S
+    dialog.element.addEventListener("keydown", (event: KeyboardEvent) => {
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+            event.preventDefault();
+            saveButton.click();
+        }
+    });
 }
 
-function buildApiGroup(context: PanelContext): Refresh {
-    const {t, setting, settings} = context;
+function buildApiGroup(root: HTMLElement, t: T, settings: PluginSettings): Sync {
+    const items = createGroup(root, t("groupApi"));
     const {api} = settings;
-    groupHeader(setting, t("groupApi"), t("groupApiDesc"));
+    const syncs: Sync[] = [];
 
     const protocol = select();
     const chatOption = document.createElement("option");
@@ -165,14 +369,20 @@ function buildApiGroup(context: PanelContext): Refresh {
     protocol.addEventListener("change", () => {
         api.protocol = protocol.value;
     });
-    rowItem(setting, t("protocol"), t("protocolDesc"), protocol);
+    syncs.push(() => {
+        protocol.value = api.protocol;
+    });
+    rowItem(items, t("protocol"), t("protocolDesc"), protocol);
 
     const baseURL = input();
     baseURL.placeholder = "https://api.openai.com/v1";
     baseURL.addEventListener("input", () => {
         api.baseURL = baseURL.value;
     });
-    rowItem(setting, t("baseUrl"), t("baseUrlDesc"), baseURL);
+    syncs.push(() => {
+        baseURL.value = api.baseURL;
+    });
+    rowItem(items, t("baseUrl"), t("baseUrlDesc"), baseURL);
 
     const apiKey = input();
     apiKey.type = "password";
@@ -180,19 +390,31 @@ function buildApiGroup(context: PanelContext): Refresh {
     apiKey.addEventListener("input", () => {
         api.apiKey = apiKey.value;
     });
-    rowItem(setting, t("apiKey"), t("apiKeyDesc"), apiKey);
+    syncs.push(() => {
+        apiKey.value = api.apiKey;
+    });
+    rowItem(items, t("apiKey"), t("apiKeyDesc"), apiKey);
+
+    // 已拉取到的模型名，供输入框的下拉使用；为空表示还没拉过
+    let availableModels: string[] = [];
 
     const modelInput = input();
     modelInput.placeholder = t("modelPlaceholder");
+    const pickModel = (id: string) => {
+        api.model = id;
+        modelInput.value = id;
+    };
     modelInput.addEventListener("input", () => {
         api.model = modelInput.value;
     });
-
-    const modelSelect = select();
-    modelSelect.style.display = "none";
-    modelSelect.addEventListener("change", () => {
-        api.model = modelSelect.value;
-        modelInput.value = modelSelect.value;
+    // 点输入框即可从已拉取的列表里挑；模型名本身仍允许直接手打
+    modelInput.addEventListener("click", () => {
+        if (availableModels.length > 0) {
+            openModelMenu(modelInput, availableModels, t, pickModel);
+        }
+    });
+    syncs.push(() => {
+        modelInput.value = api.model;
     });
 
     const fetchButton = document.createElement("button");
@@ -211,15 +433,9 @@ function buildApiGroup(context: PanelContext): Refresh {
                 showMessage(t("testFailed", {message: "no models returned"}), 8000, "error");
                 return;
             }
-            modelSelect.replaceChildren();
-            for (const id of models) {
-                const option = document.createElement("option");
-                option.value = id;
-                option.textContent = id;
-                modelSelect.append(option);
-            }
-            modelSelect.value = api.model || models[0];
-            modelSelect.style.display = "";
+            availableModels = models;
+            // 拉完直接摊开，省得再点一次输入框
+            openModelMenu(modelInput, availableModels, t, pickModel);
         } catch (error) {
             showMessage(t("testFailed", {message: error instanceof Error ? error.message : String(error)}), 12000, "error");
         } finally {
@@ -229,19 +445,17 @@ function buildApiGroup(context: PanelContext): Refresh {
     });
 
     const modelBox = document.createElement("div");
-    modelBox.className = "fn__flex";
-    modelBox.style.gap = "8px";
-    modelBox.style.flexWrap = "wrap";
-    modelBox.append(modelInput, fetchButton, modelSelect);
-    rowItem(setting, t("modelName"), t("modelNameDesc"), modelBox);
+    modelBox.className = "ai-title-settings__field-row";
+    modelBox.append(modelInput, fetchButton);
+    stackItem(items, t("modelName"), t("modelNameDesc"), modelBox);
 
     const importButton = document.createElement("button");
     importButton.className = "b3-button b3-button--outline";
     importButton.textContent = t("importFromSiyuan");
     importButton.addEventListener("click", () => {
-        openImportDialog(t, settings, context.refreshAll);
+        openImportDialog(t, settings, () => syncs.forEach((sync) => sync()));
     });
-    rowItem(setting, t("importFromSiyuan"), t("importFromSiyuanDesc"), importButton);
+    rowItem(items, t("importFromSiyuan"), t("importFromSiyuanDesc"), importButton);
 
     const thinking = select();
     const thinkingLabels: Record<string, string> = {
@@ -251,49 +465,64 @@ function buildApiGroup(context: PanelContext): Refresh {
     for (const preset of THINKING_PRESETS) {
         const option = document.createElement("option");
         option.value = preset;
-        // 预设项直接展示实际会发送的字段名，避免用户不知道点了什么
+        // 预设项直接展示实际会发送的 JSON，避免用户不知道选了会发什么
         option.textContent = thinkingLabels[preset] ?? preset;
         thinking.append(option);
     }
     const customThinking = textarea(2);
     customThinking.placeholder = '{"enable_thinking": false}';
-    customThinking.style.marginTop = "8px";
     customThinking.addEventListener("input", () => {
         api.customThinking = customThinking.value;
     });
-
     thinking.addEventListener("change", () => {
         api.disableThinking = thinking.value;
         customThinking.style.display = thinking.value === THINKING_CUSTOM ? "" : "none";
     });
+    syncs.push(() => {
+        thinking.value = api.disableThinking;
+        customThinking.value = api.customThinking;
+        customThinking.style.display = api.disableThinking === THINKING_CUSTOM ? "" : "none";
+    });
 
     const thinkingBox = document.createElement("div");
     thinkingBox.append(thinking, customThinking);
-    columnItem(setting, t("disableThinking"), t("disableThinkingDesc"), thinkingBox);
+    stackItem(items, t("disableThinking"), t("disableThinkingDesc"), thinkingBox);
 
-    const temperature = numberInput(api.temperature, 0.1);
+    const temperature = numberInput(0.1);
     temperature.addEventListener("input", () => {
         api.temperature = parseNumber(temperature.value, DEFAULT_SETTINGS.api.temperature);
     });
-    rowItem(setting, t("temperature"), t("temperatureDesc"), temperature);
+    syncs.push(() => {
+        temperature.value = String(api.temperature);
+    });
+    rowItem(items, t("temperature"), t("temperatureDesc"), temperature);
 
-    const topP = numberInput(api.topP, 0.05);
+    const topP = numberInput(0.05);
     topP.addEventListener("input", () => {
         api.topP = parseOptionalNumber(topP.value);
     });
-    rowItem(setting, t("topP"), t("topPDesc"), topP);
+    syncs.push(() => {
+        topP.value = api.topP === null ? "" : String(api.topP);
+    });
+    rowItem(items, t("topP"), t("topPDesc"), topP);
 
-    const topK = numberInput(api.topK);
+    const topK = numberInput();
     topK.addEventListener("input", () => {
         api.topK = parseOptionalNumber(topK.value);
     });
-    rowItem(setting, t("topK"), t("topKDesc"), topK);
+    syncs.push(() => {
+        topK.value = api.topK === null ? "" : String(api.topK);
+    });
+    rowItem(items, t("topK"), t("topKDesc"), topK);
 
-    const maxTokens = numberInput(api.maxTokens);
+    const maxTokens = numberInput();
     maxTokens.addEventListener("input", () => {
         api.maxTokens = parseNumber(maxTokens.value, DEFAULT_SETTINGS.api.maxTokens);
     });
-    rowItem(setting, t("maxTokens"), t("maxTokensDesc"), maxTokens);
+    syncs.push(() => {
+        maxTokens.value = String(api.maxTokens);
+    });
+    rowItem(items, t("maxTokens"), t("maxTokensDesc"), maxTokens);
 
     const testButton = document.createElement("button");
     testButton.className = "b3-button b3-button--outline";
@@ -319,21 +548,9 @@ function buildApiGroup(context: PanelContext): Refresh {
             testButton.textContent = t("testConnection");
         }
     });
-    rowItem(setting, t("testConnection"), t("testConnectionDesc"), testButton);
+    rowItem(items, t("testConnection"), t("testConnectionDesc"), testButton);
 
-    return () => {
-        protocol.value = api.protocol;
-        baseURL.value = api.baseURL;
-        apiKey.value = api.apiKey;
-        modelInput.value = api.model;
-        thinking.value = api.disableThinking;
-        customThinking.value = api.customThinking;
-        customThinking.style.display = api.disableThinking === THINKING_CUSTOM ? "" : "none";
-        temperature.value = String(api.temperature);
-        topP.value = api.topP === null ? "" : String(api.topP);
-        topK.value = api.topK === null ? "" : String(api.topK);
-        maxTokens.value = String(api.maxTokens);
-    };
+    return () => syncs.forEach((sync) => sync());
 }
 
 /** 从思源自身的 AI 供应商配置里一次性复制 Base URL / API Key / 模型。 */
@@ -397,40 +614,55 @@ function readSiyuanProviders(): SiyuanProvider[] {
     return config?.ai?.providers ?? [];
 }
 
-function buildBehaviorGroup(context: PanelContext): Refresh {
-    const {t, setting, settings} = context;
+function buildBehaviorGroup(root: HTMLElement, t: T, settings: PluginSettings): Sync {
+    const items = createGroup(root, t("groupBehavior"));
     const {behavior} = settings;
-    groupHeader(setting, t("groupBehavior"), t("groupBehaviorDesc"));
+    const syncs: Sync[] = [];
 
-    const timeout = numberInput(behavior.timeout);
+    const timeout = numberInput();
     timeout.addEventListener("input", () => {
         behavior.timeout = parseNumber(timeout.value, DEFAULT_SETTINGS.behavior.timeout);
     });
-    rowItem(setting, t("timeout"), t("timeoutDesc"), timeout);
+    syncs.push(() => {
+        timeout.value = String(behavior.timeout);
+    });
+    rowItem(items, t("timeout"), t("timeoutDesc"), timeout);
 
-    const retries = numberInput(behavior.retries);
+    const retries = numberInput();
     retries.addEventListener("input", () => {
         behavior.retries = parseNumber(retries.value, DEFAULT_SETTINGS.behavior.retries);
     });
-    rowItem(setting, t("retries"), t("retriesDesc"), retries);
+    syncs.push(() => {
+        retries.value = String(behavior.retries);
+    });
+    rowItem(items, t("retries"), t("retriesDesc"), retries);
 
-    const contentLimit = numberInput(behavior.contentLimit);
+    const contentLimit = numberInput();
     contentLimit.addEventListener("input", () => {
         behavior.contentLimit = parseNumber(contentLimit.value, DEFAULT_SETTINGS.behavior.contentLimit);
     });
-    rowItem(setting, t("contentLimit"), t("contentLimitDesc"), contentLimit);
+    syncs.push(() => {
+        contentLimit.value = String(behavior.contentLimit);
+    });
+    rowItem(items, t("contentLimit"), t("contentLimitDesc"), contentLimit);
 
-    const batchSize = numberInput(behavior.batchSize);
+    const batchSize = numberInput();
     batchSize.addEventListener("input", () => {
         behavior.batchSize = parsePositive(batchSize.value, DEFAULT_SETTINGS.behavior.batchSize);
     });
-    rowItem(setting, t("batchSize"), t("batchSizeDesc"), batchSize);
+    syncs.push(() => {
+        batchSize.value = String(behavior.batchSize);
+    });
+    rowItem(items, t("batchSize"), t("batchSizeDesc"), batchSize);
 
-    const concurrency = numberInput(behavior.concurrency);
+    const concurrency = numberInput();
     concurrency.addEventListener("input", () => {
         behavior.concurrency = parsePositive(concurrency.value, DEFAULT_SETTINGS.behavior.concurrency);
     });
-    rowItem(setting, t("concurrency"), t("concurrencyDesc"), concurrency);
+    syncs.push(() => {
+        concurrency.value = String(behavior.concurrency);
+    });
+    rowItem(items, t("concurrency"), t("concurrencyDesc"), concurrency);
 
     const autoApply = select();
     const autoApplyLabels: Record<AutoApply, string> = {
@@ -447,85 +679,98 @@ function buildBehaviorGroup(context: PanelContext): Refresh {
     autoApply.addEventListener("change", () => {
         behavior.autoApply = autoApply.value as AutoApply;
     });
+    syncs.push(() => {
+        autoApply.value = behavior.autoApply;
+    });
 
     const autoApplyBox = document.createElement("div");
-    autoApplyBox.append(autoApply);
     const autoApplyNote = document.createElement("div");
     autoApplyNote.className = "b3-label__text";
-    autoApplyNote.style.marginTop = "8px";
     autoApplyNote.textContent = t("autoApplyBatchAlwaysAsk");
-    autoApplyBox.append(autoApplyNote);
-    columnItem(setting, t("autoApply"), t("autoApplyDesc"), autoApplyBox);
+    autoApplyBox.append(autoApply, autoApplyNote);
+    stackItem(items, t("autoApply"), t("autoApplyDesc"), autoApplyBox);
 
     const language = input();
     language.addEventListener("input", () => {
         behavior.titleLanguage = language.value;
     });
-    rowItem(setting, t("titleLanguage"), t("titleLanguageDesc"), language);
+    syncs.push(() => {
+        language.value = behavior.titleLanguage;
+    });
+    rowItem(items, t("titleLanguage"), t("titleLanguageDesc"), language);
 
     const style = input();
     style.addEventListener("input", () => {
         behavior.titleStyle = style.value;
     });
-    rowItem(setting, t("titleStyle"), t("titleStyleDesc"), style);
+    syncs.push(() => {
+        style.value = behavior.titleStyle;
+    });
+    rowItem(items, t("titleStyle"), t("titleStyleDesc"), style);
 
-    const systemPrompt = textarea(8);
+    const systemPrompt = textarea(6);
     systemPrompt.addEventListener("input", () => {
         behavior.systemPrompt = systemPrompt.value;
     });
-    columnItem(setting, t("systemPrompt"), t("systemPromptDesc"), systemPrompt);
+    syncs.push(() => {
+        systemPrompt.value = behavior.systemPrompt;
+    });
+    stackItem(items, t("systemPrompt"), t("systemPromptDesc"), systemPrompt);
 
-    const userPrompt = textarea(7);
+    const userPrompt = textarea(5);
     userPrompt.addEventListener("input", () => {
         behavior.userPrompt = userPrompt.value;
     });
-    columnItem(setting, t("userPrompt"), t("promptPlaceholders"), userPrompt);
-
-    return () => {
-        timeout.value = String(behavior.timeout);
-        retries.value = String(behavior.retries);
-        contentLimit.value = String(behavior.contentLimit);
-        batchSize.value = String(behavior.batchSize);
-        concurrency.value = String(behavior.concurrency);
-        autoApply.value = behavior.autoApply;
-        language.value = behavior.titleLanguage;
-        style.value = behavior.titleStyle;
-        systemPrompt.value = behavior.systemPrompt;
+    syncs.push(() => {
         userPrompt.value = behavior.userPrompt;
-    };
+    });
+    stackItem(items, t("userPrompt"), t("userPromptDesc"), userPrompt);
+
+    return () => syncs.forEach((sync) => sync());
 }
 
-function buildUiGroup(context: PanelContext): Refresh {
-    const {t, setting, settings} = context;
+function buildUiGroup(root: HTMLElement, t: T, settings: PluginSettings): Sync {
+    const items = createGroup(root, t("groupUi"));
     const {ui} = settings;
-    groupHeader(setting, t("groupUi"), t("groupUiDesc"));
+    const syncs: Sync[] = [];
 
-    const topBar = switchControl(ui.showTopBar, (value) => {
-        ui.showTopBar = value;
+    const topBar = switchControl();
+    topBar.addEventListener("change", () => {
+        ui.showTopBar = topBar.checked;
     });
-    rowItem(setting, t("showTopBar"), t("showTopBarDesc"), topBar);
-
-    const breadcrumb = switchControl(ui.showBreadcrumb, (value) => {
-        ui.showBreadcrumb = value;
+    syncs.push(() => {
+        topBar.checked = ui.showTopBar;
     });
-    rowItem(setting, t("showBreadcrumb"), t("showBreadcrumbDesc"), breadcrumb);
+    rowItem(items, t("showTopBar"), t("showTopBarDesc"), topBar);
 
-    const docTree = switchControl(ui.showDocTreeMenu, (value) => {
-        ui.showDocTreeMenu = value;
+    const breadcrumb = switchControl();
+    breadcrumb.addEventListener("change", () => {
+        ui.showBreadcrumb = breadcrumb.checked;
     });
-    rowItem(setting, t("showDocTreeMenu"), t("showDocTreeMenuDesc"), docTree);
+    syncs.push(() => {
+        breadcrumb.checked = ui.showBreadcrumb;
+    });
+    rowItem(items, t("showBreadcrumb"), t("showBreadcrumbDesc"), breadcrumb);
 
-    const debugSwitch = switchControl(ui.debug, (value) => {
-        ui.debug = value;
+    const docTree = switchControl();
+    docTree.addEventListener("change", () => {
+        ui.showDocTreeMenu = docTree.checked;
+    });
+    syncs.push(() => {
+        docTree.checked = ui.showDocTreeMenu;
+    });
+    rowItem(items, t("showDocTreeMenu"), t("showDocTreeMenuDesc"), docTree);
+
+    const debugSwitch = switchControl();
+    debugSwitch.addEventListener("change", () => {
+        ui.debug = debugSwitch.checked;
         // 立即生效，不必等保存后才能看到日志
-        setDebug(value);
+        setDebug(debugSwitch.checked);
     });
-    rowItem(setting, t("debugMode"), t("debugModeDesc"), debugSwitch);
+    syncs.push(() => {
+        debugSwitch.checked = ui.debug;
+    });
+    rowItem(items, t("debugMode"), t("debugModeDesc"), debugSwitch);
 
-    return () => {
-        (topBar.querySelector("input") as HTMLInputElement).checked = ui.showTopBar;
-        (breadcrumb.querySelector("input") as HTMLInputElement).checked = ui.showBreadcrumb;
-        (docTree.querySelector("input") as HTMLInputElement).checked = ui.showDocTreeMenu;
-        (debugSwitch.querySelector("input") as HTMLInputElement).checked = ui.debug;
-    };
+    return () => syncs.forEach((sync) => sync());
 }
