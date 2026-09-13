@@ -26,6 +26,7 @@
   "importFromSiyuan": "从思源设置获取",
   "importFromSiyuanDesc": "复制思源里已配置供应商的 Base URL、API Key 和模型名称；导入后插件保存自己的副本",
   "importDialogTitle": "导入供应商配置",
+  "importApply": "导入",
   "importEmpty": "思源设置里没有已填写 API Key 的 AI 供应商。",
 
   "disableThinking": "是否禁用思考",

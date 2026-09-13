@@ -26,6 +26,7 @@
   "importFromSiyuan": "Import from SiYuan",
   "importFromSiyuanDesc": "Copy the base URL, API key and model from a provider already configured in SiYuan. The plugin keeps its own copy afterwards",
   "importDialogTitle": "Import provider configuration",
+  "importApply": "Import",
   "importEmpty": "No AI provider with an API key is configured in SiYuan settings.",
 
   "disableThinking": "Disable thinking",

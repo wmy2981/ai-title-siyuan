@@ -606,7 +606,8 @@ function openImportDialog(t: T, settings: PluginSettings, onImported: () => void
 
         const choose = document.createElement("button");
         choose.className = "b3-button b3-button--outline";
-        choose.textContent = t("importFromSiyuan");
+        // 与打开本对话框的那个按钮区分开：这里点下去是把这一条配置导进来
+        choose.textContent = t("importApply");
         choose.addEventListener("click", () => {
             settings.api.baseURL = provider.baseURL ?? "";
             settings.api.apiKey = provider.apiKey ?? "";
@@ -617,7 +618,11 @@ function openImportDialog(t: T, settings: PluginSettings, onImported: () => void
             onImported();
         });
 
-        item.append(name, meta, choose);
+        const text = document.createElement("div");
+        text.className = "ai-title__import-text";
+        text.append(name, meta);
+
+        item.append(text, choose);
         body.append(item);
     }
 }

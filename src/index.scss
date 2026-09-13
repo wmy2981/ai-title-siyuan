@@ -23,9 +23,8 @@
     }
 
     &__hint {
+        // 无底色：与下方各行的左内边距对齐即可，靠灰色文字与正文区分
         padding: 8px 12px;
-        border-radius: var(--b3-border-radius);
-        background-color: var(--b3-theme-surface-lighter);
         color: var(--b3-theme-on-surface);
         font-size: 12px;
         line-height: 1.6;
@@ -94,11 +93,21 @@
 
     &__import-item {
         display: flex;
-        flex-direction: column;
-        gap: 6px;
+        align-items: center;
+        gap: 12px;
         padding: 10px 12px;
         border-radius: var(--b3-border-radius);
         background-color: var(--b3-theme-surface-lighter);
+    }
+
+    // 名称与元信息竖排在左侧，按钮跟在右边
+    &__import-text {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        flex: 1;
+        // 不加这条，meta 的 break-all 会被 flex 的最小内容宽度顶破容器
+        min-width: 0;
     }
 
     &__import-provider {
