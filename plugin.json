@@ -1,0 +1,30 @@
+{
+  "name": "ai-title-siyuan",
+  "author": "wmy2981",
+  "url": "https://github.com/wmy2981/ai-title-siyuan",
+  "version": "0.1.0",
+  "minAppVersion": "3.1.0",
+  "backends": ["all"],
+  "frontends": ["all"],
+  "disabledInPublish": true,
+  "displayName": {
+    "default": "AI Title",
+    "zh-CN": "AI标题生成"
+  },
+  "description": {
+    "default": "Generate note titles with any OpenAI-compatible chat completions endpoint",
+    "zh-CN": "用任意 OpenAI 兼容的 chat completions 接口为笔记生成标题"
+  },
+  "readme": {
+    "default": "README.md",
+    "zh-CN": "README_zh_CN.md"
+  },
+  "keywords": [
+    "ai",
+    "title",
+    "openai",
+    "chatgpt",
+    "标题",
+    "AI标题"
+  ]
+}

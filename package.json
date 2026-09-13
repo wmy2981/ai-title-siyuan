@@ -1,0 +1,29 @@
+{
+  "name": "ai-title-siyuan",
+  "version": "0.1.0",
+  "description": "Generate note titles with any OpenAI-compatible chat completions endpoint",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite build --watch --mode development",
+    "build": "vite build && node scripts/build-package.mjs",
+    "icon": "node scripts/render-icon.mjs && node scripts/render-preview.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "siyuan",
+    "plugin",
+    "ai",
+    "title",
+    "openai"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "archiver": "^7.0.1",
+    "sass-embedded": "^1.104.1",
+    "sharp": "^0.34.4",
+    "siyuan": "^1.2.7",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.7"
+  }
+}
