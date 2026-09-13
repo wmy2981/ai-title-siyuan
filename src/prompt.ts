@@ -1,0 +1,50 @@
+/**
+ * 提示词渲染。
+ *
+ * 占位符在系统提示词与用户提示词里都可用：
+ *   {{content}}  拼装好的笔记正文列表
+ *   {{language}} 行为配置里的「标题语言」
+ *   {{style}}    行为配置里的「标题风格」
+ */
+import type {BehaviorSettings} from "./config";
+
+export interface NoteText {
+    id: string;
+    text: string;
+}
+
+/**
+ * 把多篇笔记拼成 {{content}} 的内容。
+ * 用换行的 id/content 块而不是 JSON，模型对前者的遵循度更稳定，
+ * 且 id 与正文分行后不会出现转义问题。
+ */
+export function buildContent(notes: NoteText[]): string {
+    return notes
+        .map((note) => `id: ${note.id}\ncontent: ${note.text}`)
+        .join("\n\n");
+}
+
+/** 逐个替换占位符。用函数式替换，避免正文里的 $& 等被当成替换模式。 */
+function fill(template: string, values: Record<string, string>): string {
+    return template.replace(/\{\{(\w+)\}\}/g, (match, name: string) => values[name] ?? match);
+}
+
+export interface RenderedPrompt {
+    system: string;
+    user: string;
+}
+
+export function renderPrompt(
+    notes: NoteText[],
+    behavior: BehaviorSettings,
+): RenderedPrompt {
+    const values = {
+        content: buildContent(notes),
+        language: behavior.titleLanguage,
+        style: behavior.titleStyle,
+    };
+    return {
+        system: fill(behavior.systemPrompt, values),
+        user: fill(behavior.userPrompt, values),
+    };
+}
