@@ -4,15 +4,13 @@
 
 </div>
 
-<img src="assets/preview.png" alt="预览图：左侧是插件的功能清单，右侧是标题确认窗口，五篇无标题笔记一次生成完毕" width="100%">
-
 # AI标题生成
 
-一个替你给笔记起名的思源插件。选中一篇或五十篇笔记，插件向任意 OpenAI 兼容的 chat completions 接口请求标题，然后直接写回，或者先交给你确认。
+一个替你给笔记起名的思源插件。选中一篇或多篇笔记，插件向任意 OpenAI 兼容的 chat completions 接口请求标题，然后直接写回，或者先交给你确认。
 
 ## 为什么做这个
 
-思源把新建文档命名为「无标题」就不管了。之后重命名是件手工体力活，而给一整个文件夹的笔记逐个改名繁琐到多数人干脆放弃。
+思源把新建文档命名为「无标题」。之后重命名是件手工体力活，而给一整个文件夹的笔记逐个改名繁琐到多数人干脆放弃。
 
 这个插件把这道工序自动化：读取每篇笔记的正文，向模型请求标题，再通过内核自己的重命名链路写回——文档路径、子文档路径和搜索索引都保持同步。
 
@@ -29,11 +27,11 @@
 
 - 思源 3.8.3 或更高版本。
 - 一个 OpenAI 兼容的 chat completions 接口，及其 Base URL 与 API Key。
-- 管理员角色。插件通过内核发起请求，因此需要该角色。桌面端默认满足；发布服务下永远不满足，所以插件在此场景被标记为不可用。
 
 ## 安装
 
-从 [最新发行版](https://github.com/wmy2981/ai-title-siyuan/releases/latest) 下载 `package.zip`，然后在思源中打开 **设置 → 集市 → 已下载**，点击 **从安装包安装**，选择该 zip，之后启用插件。
+1. 从思源集市搜索`ai-title-siyuan`安装本插件
+2. 或从 [最新发行版](https://github.com/wmy2981/ai-title-siyuan/releases/latest) 下载 `package.zip`，然后在思源中打开 **设置 → 集市 → 已下载**，点击 **从安装包安装**，选择该 zip，之后启用插件。
 
 自行构建：
 
@@ -50,10 +48,10 @@ npm run build
 
 打开 **设置 → 集市 → 已下载 → AI标题生成 → 设置**。
 
-1. **Base URL** —— 按你所用供应商的文档带上版本段。这一点比看上去更重要：`https://api.openai.com/v1`、`https://open.bigmodel.cn/api/paas/v4`、`https://ark.cn-beijing.volces.com/api/v3` 各自都是对的，写错后缀会得到一个 404，看起来却像是模型不存在。
+1. **Base URL** —— 按你所用供应商的文档带上版本段
 2. **API Key** —— 通过 `Authorization: Bearer <key>` 发送；接口无需密钥时留空。
 3. **模型名称** —— 可直接输入，点击 **获取模型列表** 从供应商端点选择，或用 **从思源设置获取** 复制你已配置好的供应商。
-4. 点击 **测试连接**。它会让模型回复 `hi`，只要有回复就说明配置可用。
+4. 点击 **测试连接**。只要有回复就说明配置可用。
 
 ### 设置项说明
 
@@ -138,8 +136,6 @@ npm run build      # 生产构建 + package.zip
 npm run typecheck  # tsc --noEmit
 npm run icon       # 重新生成 assets/icon.png 并压缩 assets/preview.png
 ```
-
-`assets/preview.png` 是 `assets/preview.html` 在 1024×768 下的 Chrome 截图——这是集市要求的尺寸，体积上限 512 KiB。需要更新时，以该分辨率对该页面截图覆盖原文件，再执行 `node scripts/render-preview.mjs` 压缩。该脚本会在页面尺寸或截图尺寸对不上时直接报错退出，避免再出现尺寸不合规的预览图。
 
 ## 许可
 

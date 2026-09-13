@@ -4,15 +4,13 @@
 
 </div>
 
-<img src="assets/preview.png" alt="Preview: a list of the plugin's capabilities beside its title review dialog, where five untitled notes have each been given a title in one pass" width="100%">
-
 # AI Title
 
-A SiYuan plugin that names your notes for you. Select one note or fifty, and it asks an OpenAI-compatible chat completions endpoint for a title for each one — then either writes them back or lets you review first.
+A SiYuan plugin that names your notes for you. Select one or more notes, and it asks an OpenAI-compatible chat completions endpoint for a title for each one — then either writes them back or lets you review first.
 
 ## Why it exists
 
-SiYuan names a new document `Untitled` and leaves it at that. Renaming later is a manual chore, and doing it for a folder full of notes is tedious enough that most people never get around to it.
+SiYuan names a new document `Untitled`. Renaming later is a manual chore, and doing it for a folder full of notes is tedious enough that most people never get around to it.
 
 This plugin does the naming pass for you. It reads each note's content, asks a model for a title, and writes it back through the kernel's own rename path so the document path, its child documents' paths and the search index all stay consistent.
 
@@ -29,11 +27,11 @@ This plugin does the naming pass for you. It reads each note's content, asks a m
 
 - SiYuan 3.8.3 or later.
 - An OpenAI-compatible chat completions endpoint, and its base URL and API key.
-- An administrator role. The plugin sends requests through the kernel, which requires it. The desktop app satisfies this by default; the publish service never does, which is why the plugin is marked as disabled there.
 
 ## Install
 
-Download `package.zip` from the [latest release](https://github.com/wmy2981/ai-title-siyuan/releases/latest), then in SiYuan open **Settings → Marketplace → Downloaded**, click **Install from package**, and pick the zip. Enable the plugin afterwards.
+1. Search for `ai-title-siyuan` in the SiYuan marketplace and install it from there.
+2. Or download `package.zip` from the [latest release](https://github.com/wmy2981/ai-title-siyuan/releases/latest), then in SiYuan open **Settings → Marketplace → Downloaded**, click **Install from package**, and pick that zip. Enable the plugin afterwards.
 
 To build it yourself:
 
@@ -50,10 +48,10 @@ That writes `package.zip` in the repository root.
 
 Open **Settings → Marketplace → Downloaded → AI Title → Settings**.
 
-1. **Base URL** — include whatever version segment your provider documents. This matters more than it looks: `https://api.openai.com/v1`, `https://open.bigmodel.cn/api/paas/v4` and `https://ark.cn-beijing.volces.com/api/v3` are all correct for their provider, and the wrong suffix yields a 404 that reads like a missing model.
+1. **Base URL** — include the version segment your provider documents.
 2. **API Key** — sent as `Authorization: Bearer <key>`. Leave empty if your endpoint needs no key.
 3. **Model** — type a name, click **Fetch models** to pick from the provider's list, or use **Import from SiYuan** to copy a provider you already configured there.
-4. Click **Test connection**. It asks the model to reply `hi`; any reply means the configuration works.
+4. Click **Test connection**. Any reply means the configuration works.
 
 ### Settings reference
 
@@ -138,8 +136,6 @@ npm run build      # production build + package.zip
 npm run typecheck  # tsc --noEmit
 npm run icon       # regenerate assets/icon.png and compress assets/preview.png
 ```
-
-`assets/preview.png` is a Chrome capture of `assets/preview.html` at 1024×768 — the size the marketplace asks for, capped at 512 KiB. To update it, screenshot the page at that size over the file, then run `node scripts/render-preview.mjs` to compress it. That script fails if either the page or the capture is off-size, so a wrong-sized preview cannot ship unnoticed.
 
 ## License
 
