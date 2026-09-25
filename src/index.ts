@@ -345,7 +345,7 @@ export default class AiTitlePlugin extends Plugin {
             showMessage(this.t("summarySkipped", {
                 count: skipped.length,
                 list: skipped.map((result) => label(result.id)).join("、"),
-            }), 8000);
+            }), 3000);
         }
         for (const result of errored) {
             const message = result.reason === "emptyContent"
