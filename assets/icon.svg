@@ -8,8 +8,11 @@
 
        软件内那份 24x24 单色图标在 src/icons.ts，构图与这里一致。 -->
   <defs>
+    <!-- 这块裁剪只负责把右下角的蓝弧切回 160x160 画布内，不切圆角：
+         集市卡片自己会给图标加 border-radius（app/src/assets/scss/component/_card.scss），
+         图里再圆一次会在四角露出底色。 -->
     <clipPath id="tileClip">
-      <rect width="160" height="160" rx="34"/>
+      <rect width="160" height="160"/>
     </clipPath>
   </defs>
 
