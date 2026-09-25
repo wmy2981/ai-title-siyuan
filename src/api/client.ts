@@ -11,8 +11,8 @@ import {fetchSyncPost} from "siyuan";
 import {
     chatCompletionsURL,
     modelsURL,
+    REASONING_DEFAULT,
     REASONING_EFFORT_FIELD,
-    REASONING_EFFORT_OFF,
     THINKING_CUSTOM,
     THINKING_DISABLED,
     type ApiSettings,
@@ -62,7 +62,7 @@ export class ApiError extends Error {
 export const EMPTY_CONTENT = "EMPTY_CONTENT";
 
 /**
- * 关闭推理的请求体字段。
+ * 思考强度的请求体字段。
  *
  * 这是唯一一处写 reasoning_effort 的地方，理由见 config.ts 的 REASONING_EFFORT_FIELD。
  * 副作用是：供应商若不认这个参数且不容忍未知字段，会直接 400。
@@ -70,7 +70,7 @@ export const EMPTY_CONTENT = "EMPTY_CONTENT";
  * 「发出去、被静默忽略、看起来一切正常」的失败好得多。
  */
 function reasoningFields(api: ApiSettings): Record<string, unknown> {
-    return api.suppressReasoning ? {[REASONING_EFFORT_FIELD]: REASONING_EFFORT_OFF} : {};
+    return api.reasoningEffort === REASONING_DEFAULT ? {} : {[REASONING_EFFORT_FIELD]: api.reasoningEffort};
 }
 
 /**
@@ -418,12 +418,10 @@ export async function testConnection(api: ApiSettings, behavior: BehaviorSetting
         },
         {
             ...api,
-            // 测试不注入思考参数，避免把「参数不被支持」误判成「连不上」
-            suppressReasoning: false,
+            // 连通性检查只要一句话，没必要按配置里的输出上限去要一整篇
             maxTokens: 16,
         },
         // 测试连接不重试，让问题立刻暴露
-        {...behavior, retries: 0},
-    );
+        {...behavior, retries: 0},    );
     return {reply: result.text.slice(0, 40), elapsed: Date.now() - started};
 }

@@ -22,6 +22,25 @@ export const REASONING_EFFORT_FIELD = "reasoning_effort";
 export const REASONING_EFFORT_OFF = "none";
 
 /**
+ * 思考强度档位，取值与思源自己的 AI 设置一致（app/src/layout/dock/agent/AgentReasoning.ts）。
+ *
+ * 空串表示不发送这个字段，由供应商按自己的默认值处理 —— 这跟 "none"（明确要求不推理）
+ * 是两回事，所以两者各占一档，而不是用「关闭」一个开关概括。
+ */
+export const REASONING_DEFAULT = "";
+export const REASONING_OPTIONS = [
+    REASONING_EFFORT_OFF,
+    REASONING_DEFAULT,
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+    "max",
+] as const;
+
+export type ReasoningEffort = (typeof REASONING_OPTIONS)[number];
+
+/**
  * 已弃用：旧版让用户从一串 JSON 片段里挑一条并入请求体顶层。
  *
  * 撤出界面是因为它没法可靠工作：
@@ -31,7 +50,7 @@ export const REASONING_EFFORT_OFF = "none";
  * - 其余几条各只对一个供应商有效，选错时同样没有任何反馈。
  *
  * 代码保留未删（含 client 的 thinkingFields），但新配置不再写入这些字段，
- * 读到旧配置时由 mergeSettings 折算成 suppressReasoning。
+ * 读到旧配置时由 mergeSettings 折算成 reasoningEffort。
  *
  * 每一项都必须是**完整的 JSON 对象文本**：client 拿到后直接 JSON.parse。
  * 更早期版本把这里写成了 `"key": value` 片段，parse 必然抛错，
@@ -91,8 +110,8 @@ export interface ApiSettings {
     baseURL: string;
     apiKey: string;
     model: string;
-    /** 关闭推理：开启后请求体带上 reasoning_effort: "none"。 */
-    suppressReasoning: boolean;
+    /** 思考强度，空串表示不发送 reasoning_effort。 */
+    reasoningEffort: ReasoningEffort;
     /** @deprecated 旧版的 JSON 片段下拉取值，已撤出界面，仅用于读旧配置。 */
     disableThinking: string;
     /** @deprecated 配合 disableThinking 的自定义 JSON，已撤出界面。 */
@@ -192,7 +211,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
         baseURL: "",
         apiKey: "",
         model: "",
-        suppressReasoning: false,
+        reasoningEffort: REASONING_DEFAULT,
         disableThinking: THINKING_DISABLED,
         customThinking: "",
         temperature: 1.0,
@@ -242,15 +261,21 @@ export function mergeSettings(stored: unknown): PluginSettings {
     const api = {...DEFAULT_SETTINGS.api, ...(raw.api ?? {})};
     // 旧下拉已撤出界面并弃用，这里把旧字段一律清掉 —— 弃用意味着不再发送，
     // 而不是留着它继续拼进请求体（那些字段要么永远不生效，要么只对一个供应商有效，
-    // 具体见 THINKING_PRESETS 的注释）。用户本来「想关掉思考」的意图折算进新开关，
-    // 只在没存过 suppressReasoning 时推导一次，之后以新界面上的选择为准。
-    if (typeof (raw.api as Partial<ApiSettings> | undefined)?.suppressReasoning !== "boolean") {
-        // 更早期版本存的是 `"key": value` 片段，那种解析不了，按「不禁用」处理
-        api.suppressReasoning = isValidThinkingPreset(api.disableThinking) &&
-            api.disableThinking !== THINKING_DISABLED;
-    }
+    // 具体见 THINKING_PRESETS 的注释）。
     api.disableThinking = DEFAULT_SETTINGS.api.disableThinking;
     api.customThinking = "";
+    // 旧版的「禁用思考」开关折算成思考强度的「禁用」档：用户想要的是「明确要求不推理」，
+    // 而不是「不发送这个字段」，两者在新界面里是不同的档位，不能混为一谈。
+    // 只在没存过 reasoningEffort 时推导一次，之后以新界面上的选择为准；
+    // 更早期版本存的是 `"key": value` 片段，那种解析不了，按「默认」处理。
+    const storedApi = raw.api as (Partial<ApiSettings> & {suppressReasoning?: unknown}) | undefined;
+    if (typeof storedApi?.reasoningEffort !== "string") {
+        const wantedOff = typeof storedApi?.suppressReasoning === "boolean"
+            ? storedApi.suppressReasoning
+            : isValidThinkingPreset(api.disableThinking) && api.disableThinking !== THINKING_DISABLED;
+        api.reasoningEffort = wantedOff ? REASONING_EFFORT_OFF : REASONING_DEFAULT;
+    }
+    delete (api as Record<string, unknown>).suppressReasoning;
     const behavior = {...DEFAULT_SETTINGS.behavior, ...(raw.behavior ?? {})};
     // 旧版允许直接改写完整提示词。现在两份提示词固定，只有追加位可用，
     // 旧值一律删掉：留着一个不再被读取的字段，只会让人以为它还生效。

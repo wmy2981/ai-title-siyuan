@@ -8,6 +8,7 @@ import {chat, EMPTY_CONTENT, type ReasoningTrace} from "./api/client";
 import {extractTitles} from "./api/json";
 import {fetchNoteContent, type NoteContent} from "./content";
 import type {ApiSettings, BehaviorSettings} from "./config";
+import {REASONING_EFFORT_OFF} from "./config";
 import {debug, debugError} from "./debug";
 import {renderPrompt} from "./prompt";
 
@@ -131,8 +132,8 @@ export async function generateTitles(options: GenerateOptions): Promise<Generate
     if (ids.length === 0) {
         return {results: [], batchErrors: []};
     }
-    // 没开开关时模型推理是预期行为，不必统计，也就不会提示
-    const watchReasoning = api.suppressReasoning;
+    // 没要求关闭思考时模型推理是预期行为，不必统计，也就不会提示
+    const watchReasoning = api.reasoningEffort === REASONING_EFFORT_OFF;
 
     const contents = await loadContents(ids, behavior);
 

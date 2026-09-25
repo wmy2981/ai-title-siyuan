@@ -20,7 +20,7 @@ This plugin does the naming pass for you. It reads each note's content, asks a m
 - **Review before writing.** Every title stays editable. Untick what you don't want, edit any field, or regenerate a single row.
 - **Your style, not the contract.** The system and user prompts are fixed because they carry the JSON contract the plugin parses. Put your own requirements in the `{{system}}` and `{{user}}` append slots; `{{content}}`, `{{language}}` and `{{style}}` are filled in per request.
 - **Any compatible endpoint.** Point it at any OpenAI-compatible chat completions API, or import a provider you already configured in SiYuan.
-- **Turn reasoning off.** Built-in request body presets for Qwen, vLLM, Doubao and others, plus a free-form JSON option.
+- **Set the thinking effort.** Send `reasoning_effort` at any level from disabled up to maximum, or send nothing and leave it to the provider.
 - **Built for debugging.** Debug mode dumps the full request and response to the console.
 
 ## Requirements

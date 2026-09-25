@@ -23,6 +23,9 @@ import {
     MEDIA_OPTIONS,
     MEDIA_PLACEHOLDER,
     MEDIA_RAW,
+    REASONING_DEFAULT,
+    REASONING_EFFORT_OFF,
+    REASONING_OPTIONS,
     TOC_ALWAYS,
     TOC_NEVER,
     TOC_OPTIONS,
@@ -35,6 +38,7 @@ import {
     type AutoApply,
     type MediaMode,
     type PluginSettings,
+    type ReasoningEffort,
     type TocMode,
     type TruncateMode,
 } from "./config";
@@ -499,15 +503,30 @@ function buildApiGroup(root: HTMLElement, t: T, settings: PluginSettings): Sync 
     // 旧版这里是「从一串 JSON 片段里挑一条」的下拉，已撤出界面并弃用：
     // 其中 {"extra_body": ...} 在原始 HTTP 下永远不生效（extra_body 只是 Python SDK 的
     // 包装，SDK 发送前会把它拆开），其余几条各只对一个供应商有效，选错时还没有任何反馈。
-    // 现在只发 reasoning_effort: "none"，理由见 config.ts 的 REASONING_EFFORT_FIELD。
-    const reasoning = switchControl();
+    // 现在只发 OpenAI 官方的 reasoning_effort，取值与思源自己的 AI 设置一致。
+    const reasoning = select();
+    const reasoningLabels: Record<ReasoningEffort, string> = {
+        [REASONING_EFFORT_OFF]: t("reasoningNone"),
+        [REASONING_DEFAULT]: t("reasoningDefault"),
+        low: t("reasoningLow"),
+        medium: t("reasoningMedium"),
+        high: t("reasoningHigh"),
+        xhigh: t("reasoningXHigh"),
+        max: t("reasoningMax"),
+    };
+    for (const value of REASONING_OPTIONS) {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = reasoningLabels[value];
+        reasoning.append(option);
+    }
     reasoning.addEventListener("change", () => {
-        api.suppressReasoning = reasoning.checked;
+        api.reasoningEffort = reasoning.value as ReasoningEffort;
     });
     syncs.push(() => {
-        reasoning.checked = api.suppressReasoning;
+        reasoning.value = api.reasoningEffort;
     });
-    rowItem(items, t("disableThinking"), t("disableThinkingDesc"), reasoning);
+    rowItem(items, t("reasoningEffort"), t("reasoningEffortDesc"), reasoning);
 
     const temperature = numberInput(0.1);
     temperature.addEventListener("input", () => {
