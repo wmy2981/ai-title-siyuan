@@ -1,5 +1,5 @@
 // 把 Vite 产物补全为可安装的插件包，并压成仓库根目录的 package.zip。
-// 包内结构（release.yml 上传的就是这个 zip）：
+// 包内结构（cd.yml 上传的就是这个 zip）：
 //   index.js  index.css  plugin.json  icon.png  preview.png  README*.md  i18n/
 import {createWriteStream, existsSync, rmSync} from "node:fs";
 import {cp, stat} from "node:fs/promises";
