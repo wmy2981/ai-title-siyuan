@@ -68,11 +68,11 @@ async function loadContents(ids: string[], contentLimit: number): Promise<NoteCo
     for (const id of ids) {
         try {
             const content = await fetchNoteContent(id, contentLimit);
-            debug(`Loaded note ${id}: ${content.text.length} chars${content.empty ? " (empty, will be skipped)" : ""}`);
+            debug(`Loaded note ${id}: ${content.body.length} chars${content.empty ? " (empty, will be skipped)" : ""}`);
             contents.push(content);
         } catch (error) {
             debugError(`Failed to load note ${id}`, error);
-            contents.push({id, text: "", empty: true, message: messageOf(error)});
+            contents.push({id, body: "", empty: true, message: messageOf(error)});
         }
     }
     return contents;

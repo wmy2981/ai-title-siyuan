@@ -9,11 +9,11 @@ import {fetchSyncPost} from "siyuan";
 
 export interface NoteContent {
     id: string;
-    /** 用于标题生成的正文，已剥离本地资源引用并截断。 */
-    text: string;
+    /** 笔记正文，对应提示词里的 <body>：已剥离本地资源引用并截断。 */
+    body: string;
     /** 正文是否为空，用于跳过不请求。 */
     empty: boolean;
-    /** 仅当抓取本身失败时存在，此时 text 为空、empty 为 true。 */
+    /** 仅当抓取本身失败时存在，此时 body 为空、empty 为 true。 */
     message?: string;
 }
 
@@ -73,7 +73,12 @@ export async function getDocTitle(id: string): Promise<string> {
     return response.data?.name ?? "";
 }
 
-/** 取一篇笔记的正文，供标题生成使用。 */
+/**
+ * 取一篇笔记的正文，供标题生成使用。
+ *
+ * contentLimit 只作用于正文本身：提示词里的 <id> 与后续的 <toc> 都不受它限制，
+ * 目录必须完整才有意义（否则截断后剩下的层级关系反而误导模型）。
+ */
 export async function fetchNoteContent(id: string, contentLimit: number): Promise<NoteContent> {
     const response = (await fetchSyncPost("/api/export/exportMdContent", {
         id,
@@ -92,5 +97,5 @@ export async function fetchNoteContent(id: string, contentLimit: number): Promis
 
     const raw = response.data?.content ?? "";
     const cleaned = truncate(normalizeWhitespace(stripAssetRefs(raw)), contentLimit);
-    return {id, text: cleaned, empty: !hasSubstance(cleaned)};
+    return {id, body: cleaned, empty: !hasSubstance(cleaned)};
 }
