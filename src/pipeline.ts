@@ -63,11 +63,11 @@ function messageOf(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
 
-async function loadContents(ids: string[], contentLimit: number): Promise<NoteContent[]> {
+async function loadContents(ids: string[], behavior: BehaviorSettings): Promise<NoteContent[]> {
     const contents: NoteContent[] = [];
     for (const id of ids) {
         try {
-            const content = await fetchNoteContent(id, contentLimit);
+            const content = await fetchNoteContent(id, behavior);
             debug(`Loaded note ${id}: ${content.body.length} chars${content.empty ? " (empty, will be skipped)" : ""}`);
             contents.push(content);
         } catch (error) {
@@ -134,7 +134,7 @@ export async function generateTitles(options: GenerateOptions): Promise<Generate
     // 没开开关时模型推理是预期行为，不必统计，也就不会提示
     const watchReasoning = api.suppressReasoning;
 
-    const contents = await loadContents(ids, behavior.contentLimit);
+    const contents = await loadContents(ids, behavior);
 
     const results: NoteResult[] = [];
     const pending: NoteContent[] = [];

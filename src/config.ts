@@ -60,6 +60,14 @@ export const AUTO_APPLY_OPTIONS = [AUTO_APPLY_NEVER, AUTO_APPLY_SINGLE, AUTO_APP
 
 export type AutoApply = (typeof AUTO_APPLY_OPTIONS)[number];
 
+export const MEDIA_DROP = "drop";
+export const MEDIA_PLACEHOLDER = "placeholder";
+export const MEDIA_RAW = "raw";
+export const MEDIA_OPTIONS = [MEDIA_DROP, MEDIA_PLACEHOLDER, MEDIA_RAW] as const;
+
+/** 正文里链接、图片、音视频与 iframe 的处理方式。 */
+export type MediaMode = (typeof MEDIA_OPTIONS)[number];
+
 export interface ApiSettings {
     /** 协议。当前仅实现 "openai"（Chat Completions），预留扩展 Responses API。 */
     protocol: string;
@@ -86,6 +94,8 @@ export interface BehaviorSettings {
     retries: number;
     /** 单篇笔记传入的最大字符数，超出则丢尾部。 */
     contentLimit: number;
+    /** 链接、图片、音视频与 iframe 的处理方式。 */
+    mediaMode: MediaMode;
     /** 单次请求最多传入几篇笔记。 */
     batchSize: number;
     /** 同时在飞的请求数上限。 */
@@ -159,6 +169,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
         timeout: 10000,
         retries: 1,
         contentLimit: 1000,
+        mediaMode: MEDIA_PLACEHOLDER,
         batchSize: 3,
         concurrency: 3,
         autoApply: AUTO_APPLY_NEVER,

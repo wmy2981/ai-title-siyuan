@@ -19,7 +19,12 @@ import {
     AUTO_APPLY_SINGLE,
     DEFAULT_SETTINGS,
     hasProviderConfig,
+    MEDIA_DROP,
+    MEDIA_OPTIONS,
+    MEDIA_PLACEHOLDER,
+    MEDIA_RAW,
     type AutoApply,
+    type MediaMode,
     type PluginSettings,
 } from "./config";
 import {setDebug} from "./debug";
@@ -647,6 +652,26 @@ function buildBehaviorGroup(root: HTMLElement, t: T, settings: PluginSettings): 
         contentLimit.value = String(behavior.contentLimit);
     });
     rowItem(items, t("contentLimit"), t("contentLimitDesc"), contentLimit);
+
+    const media = select();
+    const mediaLabels: Record<MediaMode, string> = {
+        [MEDIA_DROP]: t("mediaDrop"),
+        [MEDIA_PLACEHOLDER]: t("mediaPlaceholder"),
+        [MEDIA_RAW]: t("mediaRaw"),
+    };
+    for (const value of MEDIA_OPTIONS) {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = mediaLabels[value];
+        media.append(option);
+    }
+    media.addEventListener("change", () => {
+        behavior.mediaMode = media.value as MediaMode;
+    });
+    syncs.push(() => {
+        media.value = behavior.mediaMode;
+    });
+    rowItem(items, t("mediaHandling"), t("mediaHandlingDesc"), media);
 
     const batchSize = numberInput();
     batchSize.addEventListener("input", () => {
