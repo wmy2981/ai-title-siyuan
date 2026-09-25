@@ -1,15 +1,19 @@
-// 把 assets/preview.html 的 Chrome 截图压缩到集市上限以内。
+// 用 Playwright CLI 给 assets/preview.html 截图，生成集市要求的插件预览图。
 //
-// preview.png 由 Chrome 按 assets/preview.html 的 body 尺寸截图生成（见 README 的开发说明），
-// 直接截出来的图 190KiB 上下，贴着集市 200KiB 的上限。
+// 尺寸与体积上限取自 plugin-sample/README.md 的 preview 字段说明（建议尺寸 1024*768，
+// 支持 PNG/JPEG/WebP/AVIF，上限 512KiB）。截图按 1024x768 视口、1 倍像素密度拍摄，
+// preview.html 的 body 也是同样的尺寸且 overflow: hidden，所以不出现滚动条，
+// 也不需要整页截图。
+//
 // 这张图是扁平配色的特性宣传图，调色板量化几乎无损，能把体积压到 1/5。
 //
-// 尺寸按集市的要求钉死：plugin-sample/README.md 写的建议尺寸是 1024*768，
-// 上限 512 KiB。之前只拿 PNG 实际尺寸跟 HTML 声明对，两边一起写错就发现不了——
-import sharp from "sharp";
+// 首次使用前需要下载 Chromium：npx playwright install chromium。
+import {execFileSync} from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
-import {fileURLToPath} from "node:url";
+import {fileURLToPath, pathToFileURL} from "node:url";
+import sharp from "sharp";
 
 const EXPECTED_WIDTH = 1024;
 const EXPECTED_HEIGHT = 768;
@@ -18,9 +22,10 @@ const MAX_BYTES = 512 * 1024;
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const htmlPath = path.join(root, "assets", "preview.html");
 const pngPath = path.join(root, "assets", "preview.png");
+const playwrightCli = path.join(root, "node_modules", "playwright", "cli.js");
 
-if (!fs.existsSync(pngPath)) {
-    console.error(`assets/preview.png not found. Screenshot assets/preview.html first (see README).`);
+if (!fs.existsSync(playwrightCli)) {
+    console.error(`Playwright not found at ${path.relative(root, playwrightCli)}; run npm install first.`);
     process.exit(1);
 }
 
@@ -28,35 +33,54 @@ const html = fs.readFileSync(htmlPath, "utf8");
 const width = /body\s*\{[^}]*?width:\s*(\d+)px/s.exec(html)?.[1];
 const height = /body\s*\{[^}]*?height:\s*(\d+)px/s.exec(html)?.[1];
 
-const image = sharp(pngPath);
-const metadata = await image.metadata();
-
 if (width !== String(EXPECTED_WIDTH) || height !== String(EXPECTED_HEIGHT)) {
     console.error(`assets/preview.html declares ${width}x${height}; the marketplace expects ${EXPECTED_WIDTH}x${EXPECTED_HEIGHT}`);
     process.exit(1);
 }
 
-const actual = `${metadata.width}x${metadata.height}`;
-if (actual !== `${EXPECTED_WIDTH}x${EXPECTED_HEIGHT}`) {
-    console.error(`assets/preview.png is ${actual}, expected ${EXPECTED_WIDTH}x${EXPECTED_HEIGHT}; re-take the screenshot`);
-    process.exit(1);
-}
+// 先截到临时目录：任何一步失败都不会破坏仓库里已有的 preview.png
+const shotDir = fs.mkdtempSync(path.join(os.tmpdir(), "siyuan-preview-"));
+let failure = "";
 
-// 注意这是就地压缩：截图必须先落到 assets/preview.png，跑一次这里，
-// 再跑第二次会对已经量化过的图二次量化。要重新压缩，先重截。
-const before = fs.statSync(pngPath).size;
-const optimized = await sharp(pngPath)
-    .png({compressionLevel: 9, palette: true, quality: 92, effort: 10})
-    .toBuffer();
+try {
+    const shotPath = path.join(shotDir, "preview.png");
+    try {
+        execFileSync(process.execPath, [
+            playwrightCli,
+            "screenshot",
+            "--browser=chromium",
+            `--viewport-size=${EXPECTED_WIDTH},${EXPECTED_HEIGHT}`,
+            "--wait-for-timeout=500",
+            pathToFileURL(htmlPath).href,
+            shotPath,
+        ], {stdio: ["ignore", "ignore", "inherit"]});
+    } catch {
+        throw new Error("Screenshot failed; if Chromium is missing, run: npx playwright install chromium");
+    }
 
-if (optimized.length < before) {
+    const metadata = await sharp(shotPath).metadata();
+    const actual = `${metadata.width}x${metadata.height}`;
+    if (actual !== `${EXPECTED_WIDTH}x${EXPECTED_HEIGHT}`) {
+        throw new Error(`The screenshot is ${actual}, expected ${EXPECTED_WIDTH}x${EXPECTED_HEIGHT}`);
+    }
+
+    const before = fs.statSync(shotPath).size;
+    const optimized = await sharp(shotPath)
+        .png({compressionLevel: 9, palette: true, quality: 92, effort: 10})
+        .toBuffer();
+    if (optimized.length > MAX_BYTES) {
+        throw new Error(`The compressed preview is ${optimized.length} bytes, over the marketplace limit of ${MAX_BYTES}`);
+    }
+
     fs.writeFileSync(pngPath, optimized);
+    console.log(`assets/preview.png: ${before} -> ${optimized.length} bytes (${actual}, limit ${MAX_BYTES})`);
+} catch (error) {
+    failure = error.message;
+} finally {
+    fs.rmSync(shotDir, {recursive: true, force: true});
 }
 
-const after = fs.statSync(pngPath).size;
-if (after > MAX_BYTES) {
-    console.error(`assets/preview.png is ${after} bytes, over the marketplace limit of ${MAX_BYTES}`);
+if (failure) {
+    console.error(failure);
     process.exit(1);
 }
-
-console.log(`assets/preview.png: ${before} -> ${after} bytes (${actual}, limit ${MAX_BYTES})`);

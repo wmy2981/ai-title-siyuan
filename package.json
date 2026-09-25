@@ -8,6 +8,7 @@
     "dev": "vite build --watch --mode development",
     "build": "vite build && node scripts/build-package.mjs",
     "icon": "node scripts/render-icon.mjs && node scripts/render-preview.mjs",
+    "preview": "node scripts/render-preview.mjs",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [
@@ -20,6 +21,7 @@
   "license": "MIT",
   "devDependencies": {
     "archiver": "^7.0.1",
+    "playwright": "^1.63.0",
     "sass-embedded": "^1.104.1",
     "sharp": "^0.35.4",
     "siyuan": "^1.2.7",
