@@ -742,17 +742,6 @@ function buildBehaviorGroup(root: HTMLElement, t: T, settings: PluginSettings): 
         option.textContent = truncateLabels[value];
         truncateMode.append(option);
     }
-
-    const headRatio = numberInput(0.05);
-    headRatio.addEventListener("input", () => {
-        behavior.truncateHeadRatio = parseRatio(headRatio.value, DEFAULT_SETTINGS.behavior.truncateHeadRatio);
-    });
-    const ratioRow = rowItem(items, t("truncateHeadRatio"), t("truncateHeadRatioDesc"), headRatio);
-    // 比例只在「开头 + 末尾」下有意义，其余档位留着一个不起作用的输入框只会让人猜
-    const syncRatio = (): void => {
-        ratioRow.classList.toggle("fn__none", behavior.truncateMode !== TRUNCATE_BOTH);
-    };
-
     truncateMode.addEventListener("change", () => {
         behavior.truncateMode = truncateMode.value as TruncateMode;
         syncRatio();
@@ -763,6 +752,19 @@ function buildBehaviorGroup(root: HTMLElement, t: T, settings: PluginSettings): 
         syncRatio();
     });
     rowItem(items, t("truncateMode"), t("truncateModeDesc"), truncateMode);
+
+    // 比例必须紧跟在这条下拉下面：它只对「开头 + 末尾」一档有意义，
+    // 中间隔着别的设置项时，用户看不出它在描述谁
+    const headRatio = numberInput(0.05);
+    headRatio.addEventListener("input", () => {
+        behavior.truncateHeadRatio = parseRatio(headRatio.value, DEFAULT_SETTINGS.behavior.truncateHeadRatio);
+    });
+    const ratioRow = rowItem(items, t("truncateHeadRatio"), t("truncateHeadRatioDesc"), headRatio);
+
+    // 只在「开头 + 末尾」下显示，其余档位留着一个不起作用的输入框只会让人猜
+    function syncRatio(): void {
+        ratioRow.classList.toggle("fn__none", behavior.truncateMode !== TRUNCATE_BOTH);
+    }
 
     const media = select();
     const mediaLabels: Record<MediaMode, string> = {
