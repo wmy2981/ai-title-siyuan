@@ -487,9 +487,36 @@ function buildApiGroup(root: HTMLElement, t: T, settings: PluginSettings): Sync 
         }
     });
 
+    // 与「获取模型列表」同一行：两个按钮都在改/验同一个模型名，
+    // 分开两行时用户点完测试还要回头找输入框在哪（#18）
+    const testButton = document.createElement("button");
+    testButton.className = "b3-button b3-button--outline fn__flex-shrink";
+    testButton.textContent = t("testConnection");
+    testButton.addEventListener("click", async () => {
+        if (!hasProviderConfig(api)) {
+            showMessage(t("testNoConfig"), 6000, "error");
+            return;
+        }
+        testButton.disabled = true;
+        testButton.textContent = t("testRunning");
+        try {
+            const {reply, elapsed} = await testConnection(api, settings.behavior);
+            showMessage(t("testOk", {reply, elapsed}), 6000);
+        } catch (error) {
+            showMessage(
+                t("testFailed", {message: error instanceof Error ? error.message : String(error)}),
+                12000,
+                "error",
+            );
+        } finally {
+            testButton.disabled = false;
+            testButton.textContent = t("testConnection");
+        }
+    });
+
     const modelBox = document.createElement("div");
     modelBox.className = "ai-title-settings__field-row";
-    modelBox.append(modelInput, fetchButton);
+    modelBox.append(modelInput, fetchButton, testButton);
     stackItem(items, t("modelName"), t("modelNameDesc"), modelBox);
 
     const importButton = document.createElement("button");
@@ -563,32 +590,6 @@ function buildApiGroup(root: HTMLElement, t: T, settings: PluginSettings): Sync 
         maxTokens.value = String(api.maxTokens);
     });
     rowItem(items, t("maxTokens"), t("maxTokensDesc"), maxTokens);
-
-    const testButton = document.createElement("button");
-    testButton.className = "b3-button b3-button--outline";
-    testButton.textContent = t("testConnection");
-    testButton.addEventListener("click", async () => {
-        if (!hasProviderConfig(api)) {
-            showMessage(t("testNoConfig"), 6000, "error");
-            return;
-        }
-        testButton.disabled = true;
-        testButton.textContent = t("testRunning");
-        try {
-            const {reply, elapsed} = await testConnection(api, settings.behavior);
-            showMessage(t("testOk", {reply, elapsed}), 6000);
-        } catch (error) {
-            showMessage(
-                t("testFailed", {message: error instanceof Error ? error.message : String(error)}),
-                12000,
-                "error",
-            );
-        } finally {
-            testButton.disabled = false;
-            testButton.textContent = t("testConnection");
-        }
-    });
-    rowItem(items, t("testConnection"), t("testConnectionDesc"), testButton);
 
     return () => syncs.forEach((sync) => sync());
 }

@@ -407,6 +407,10 @@ export async function listModels(api: ApiSettings, timeout: number): Promise<str
 
 /**
  * 测试连接：让模型回一个 "hi"，只要拿得到文本就算通过。
+ *
+ * 请求参数原样取自设置页，包括模型、思考强度与采样参数：只测「能不能连上」
+ * 而把参数换成一套安全的默认值，结果是连接测通了、真跑生成时照样 400。
+ * 唯一不动的是重试次数 —— 测试要的是立刻暴露问题。
  * 返回耗时毫秒数，提示文案由 UI 层拼装。
  */
 export async function testConnection(api: ApiSettings, behavior: BehaviorSettings): Promise<{reply: string; elapsed: number}> {
@@ -416,12 +420,8 @@ export async function testConnection(api: ApiSettings, behavior: BehaviorSetting
             system: "You are a connectivity check. Reply with exactly: hi",
             user: "hi",
         },
-        {
-            ...api,
-            // 连通性检查只要一句话，没必要按配置里的输出上限去要一整篇
-            maxTokens: 16,
-        },
-        // 测试连接不重试，让问题立刻暴露
-        {...behavior, retries: 0},    );
+        api,
+        {...behavior, retries: 0},
+    );
     return {reply: result.text.slice(0, 40), elapsed: Date.now() - started};
 }

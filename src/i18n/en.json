@@ -109,7 +109,7 @@
   "saveFailed": "Save failed: {message}",
 
   "testConnection": "Test connection",
-  "testConnectionDesc": "Sends a minimal request asking the model to reply \"hi\". Any reply means the configuration works",
+  "testConnectionDesc": "Sends one request with the parameters exactly as configured here, including the thinking effort, and asks the model to reply \"hi\". Any reply means the configuration works",
   "testRunning": "Testing…",
   "testNoConfig": "Fill in the base URL and model name first",
   "testOk": "Connection OK — model replied \"{reply}\" in {elapsed} ms",

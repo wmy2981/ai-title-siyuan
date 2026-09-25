@@ -109,7 +109,7 @@
   "saveFailed": "保存失败：{message}",
 
   "testConnection": "测试连接",
-  "testConnectionDesc": "发送最小请求，要求模型只回复 \"hi\"，有返回即视为配置正确",
+  "testConnectionDesc": "按这里填写的参数原样发一次请求（含思考强度），要求模型只回复 \"hi\"，有返回即视为配置正确",
   "testRunning": "测试中…",
   "testNoConfig": "请先填写 Base URL 和模型名称",
   "testOk": "连接正常 —— 模型在 {elapsed} ms 内回复了「{reply}」",
