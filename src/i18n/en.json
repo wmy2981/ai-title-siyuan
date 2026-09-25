@@ -144,7 +144,7 @@
 
   "summarySuccess": "Applied {count} title(s)",
   "summaryFailed": "Failed: {list}",
-  "summarySkipped": "Skipped: {list}",
+  "summarySkipped": "Skipped {count} note(s) with no content: {list}",
   "summaryNotReturned": "{count} note(s) got no title from the model: {list}",
   "summaryBatchFailed": "{count} batch(es) failed",
   "reasoningStillOn": "Disable thinking had no effect: {tokens} reasoning tokens were still spent",

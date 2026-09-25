@@ -48,6 +48,9 @@ const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "s
 const AUDIO_EXTENSIONS = new Set(["mp3", "wav", "m4a", "flac", "ogg", "oga", "aac", "opus", "wma"]);
 const VIDEO_EXTENSIONS = new Set(["mp4", "webm", "mov", "mkv", "avi", "wmv", "flv", "m4v", "mpg", "mpeg"]);
 
+/** 替换媒体引用时写进正文的占位符，判断空笔记时要把它们摘掉。 */
+const PLACEHOLDER_TOKENS = /\[(?:image|audio|video|iframe|link|file(?:\(\.[a-z0-9]+\))?)\]/gi;
+
 function extensionOf(url: string): string {
     return /\.([a-z0-9]+)$/i.exec(url.split(/[?#]/)[0])?.[1]?.toLowerCase() ?? "";
 }
@@ -156,13 +159,19 @@ export function truncate(text: string, mode: TruncateMode, limit: number, headRa
     return `${text.slice(0, head)}${TRUNCATION_MARKER}${tail === 0 ? "" : text.slice(text.length - tail)}`;
 }
 
-/** 去掉 Markdown 结构字符后判断是否真的还有内容。 */
+/**
+ * 判断正文是否真的还有内容。
+ *
+ * 只看还剩不剩字母、数字或汉字：加粗记号、分隔线、表格竖线、空标题这类
+ * 纯 Markdown 结构一律不算内容，否则一篇只剩 `# ---` 的空文档会被当成
+ * 有内容发去请求，模型只能凭空编一个标题。
+ *
+ * 媒体占位符必须先摘掉 —— `[image]` 里的字母是插件自己写进去的，
+ * 一张图配一行字的笔记没有它反而才被判成空。
+ */
 function hasSubstance(text: string): boolean {
-    const plain = text
-        .replace(/^[#>\-*+\d.\s|]+/gm, "")
-        .replace(/[*_`~[\]]/g, "")
-        .trim();
-    return plain.length > 0;
+    const plain = text.replace(PLACEHOLDER_TOKENS, "").replace(/<\/?[a-z][^>]*>/gi, "");
+    return /[\p{L}\p{N}]/u.test(plain);
 }
 
 /** 取一篇文档当前的标题，用于确认窗口的对比展示。 */

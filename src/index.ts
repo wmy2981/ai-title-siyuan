@@ -340,7 +340,10 @@ export default class AiTitlePlugin extends Plugin {
             }), 10000, "error");
         }
         if (skipped.length > 0) {
+            // 空笔记没发过请求，必须说清楚「跳过」不是「失败」，
+            // 否则用户会去翻供应商配置找一个根本不存在的故障
             showMessage(this.t("summarySkipped", {
+                count: skipped.length,
                 list: skipped.map((result) => label(result.id)).join("、"),
             }), 8000);
         }

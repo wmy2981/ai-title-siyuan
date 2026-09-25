@@ -144,7 +144,7 @@
 
   "summarySuccess": "已应用 {count} 个标题",
   "summaryFailed": "失败：{list}",
-  "summarySkipped": "已跳过：{list}",
+  "summarySkipped": "已跳过 {count} 篇正文为空的笔记：{list}",
   "summaryNotReturned": "{count} 篇未从模型获取到标题：{list}",
   "summaryBatchFailed": "{count} 个批次请求失败",
   "reasoningStillOn": "禁用思考未生效：本次仍有 {tokens} 个推理 token",
