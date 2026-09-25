@@ -721,6 +721,15 @@ function buildBehaviorGroup(root: HTMLElement, t: T, settings: PluginSettings): 
     });
     rowItem(items, t("mediaHandling"), t("mediaHandlingDesc"), media);
 
+    const includeTitle = switchControl();
+    includeTitle.addEventListener("change", () => {
+        behavior.includeTitle = includeTitle.checked;
+    });
+    syncs.push(() => {
+        includeTitle.checked = behavior.includeTitle;
+    });
+    rowItem(items, t("includeTitle"), t("includeTitleDesc"), includeTitle);
+
     const batchSize = numberInput();
     batchSize.addEventListener("input", () => {
         behavior.batchSize = parsePositive(batchSize.value, DEFAULT_SETTINGS.behavior.batchSize);

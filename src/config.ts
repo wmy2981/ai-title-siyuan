@@ -109,6 +109,8 @@ export interface BehaviorSettings {
     truncateHeadRatio: number;
     /** 链接、图片、音视频与 iframe 的处理方式。 */
     mediaMode: MediaMode;
+    /** 是否把文档当前标题一并传入（正文与目录各加一行 H1）。 */
+    includeTitle: boolean;
     /** 单次请求最多传入几篇笔记。 */
     batchSize: number;
     /** 同时在飞的请求数上限。 */
@@ -185,6 +187,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
         truncateMode: TRUNCATE_HEAD,
         truncateHeadRatio: 0.5,
         mediaMode: MEDIA_PLACEHOLDER,
+        includeTitle: true,
         batchSize: 3,
         concurrency: 3,
         autoApply: AUTO_APPLY_NEVER,

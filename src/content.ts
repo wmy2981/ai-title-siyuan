@@ -19,11 +19,13 @@ import {
 
 export interface NoteContent {
     id: string;
+    /** 文档当前标题；未启用或取不到时为空串。 */
+    title: string;
     /** 笔记正文，对应提示词里的 <body>：已按设置处理媒体引用并截取。 */
     body: string;
     /** 正文是否按长度上限截取过，目录按需传入时据此判断。 */
     truncated: boolean;
-    /** 正文是否为空，用于跳过不请求。 */
+    /** 正文是否为空，用于跳过不请求。只看正文，不含文档标题。 */
     empty: boolean;
     /** 仅当抓取本身失败时存在，此时 body 为空、empty 为 true。 */
     message?: string;
@@ -172,6 +174,15 @@ export async function getDocTitle(id: string): Promise<string> {
     return response.data?.name ?? "";
 }
 
+/** 标题只是补充信息，取不到就当作没有，不让整篇笔记跟着失败。 */
+async function readTitle(id: string): Promise<string> {
+    try {
+        return (await getDocTitle(id)).trim();
+    } catch {
+        return "";
+    }
+}
+
 /**
  * 取一篇笔记的正文，供标题生成使用。
  *
@@ -196,6 +207,12 @@ export async function fetchNoteContent(id: string, behavior: BehaviorSettings): 
 
     const raw = response.data?.content ?? "";
     const cleaned = normalizeWhitespace(replaceMedia(raw, behavior.mediaMode));
-    const body = truncate(cleaned, behavior.truncateMode, behavior.contentLimit, behavior.truncateHeadRatio);
-    return {id, body, truncated: body.length < cleaned.length, empty: !hasSubstance(body)};
+    // 空笔记只看正文本身：文档标题不算内容，否则一篇只有标题的空文档
+    // 会被当成「有内容」发去请求，模型只能把现有标题换个说法再还回来。
+    const empty = !hasSubstance(cleaned);
+    const title = behavior.includeTitle ? await readTitle(id) : "";
+    // 标题拼在正文最前面，因此同样受长度上限约束，<body> 永远不会超出额度
+    const titled = title === "" ? cleaned : `# ${title}\n\n${cleaned}`;
+    const body = truncate(titled, behavior.truncateMode, behavior.contentLimit, behavior.truncateHeadRatio);
+    return {id, title, body, truncated: body.length < titled.length, empty};
 }

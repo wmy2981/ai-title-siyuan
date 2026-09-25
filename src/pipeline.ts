@@ -72,7 +72,7 @@ async function loadContents(ids: string[], behavior: BehaviorSettings): Promise<
             contents.push(content);
         } catch (error) {
             debugError(`Failed to load note ${id}`, error);
-            contents.push({id, body: "", truncated: false, empty: true, message: messageOf(error)});
+            contents.push({id, title: "", body: "", truncated: false, empty: true, message: messageOf(error)});
         }
     }
     return contents;

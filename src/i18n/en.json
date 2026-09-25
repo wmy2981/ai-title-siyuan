@@ -62,6 +62,8 @@
   "mediaDrop": "Drop them",
   "mediaPlaceholder": "Short placeholder",
   "mediaRaw": "Keep them as they are",
+  "includeTitle": "Include the current title",
+  "includeTitleDesc": "Sends the document title the note already has along with the body. Turning it off asks the model to judge from the content alone",
   "batchSize": "Notes per request",
   "batchSizeDesc": "Selecting more notes splits the work into batches of this size",
   "concurrency": "Max concurrent requests",

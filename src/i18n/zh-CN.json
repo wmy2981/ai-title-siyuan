@@ -62,6 +62,8 @@
   "mediaDrop": "丢弃",
   "mediaPlaceholder": "简短占位符",
   "mediaRaw": "原始传入",
+  "includeTitle": "传入笔记已有标题",
+  "includeTitleDesc": "把文档当前标题连同正文一起传给模型。关闭后模型只能依据正文判断",
   "batchSize": "单次请求最多传入笔记数",
   "batchSizeDesc": "选中的笔记超过此数量时自动切成多个批次",
   "concurrency": "最大并发请求数",
