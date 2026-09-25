@@ -1,6 +1,6 @@
 {
   "name": "ai-title-siyuan",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Generate note titles with any OpenAI-compatible chat completions endpoint",
   "type": "module",
   "private": true,
