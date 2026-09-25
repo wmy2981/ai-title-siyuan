@@ -134,8 +134,11 @@ Enable **Debug mode** in the settings and open the console. It prints the full r
 npm run dev        # rebuild on change
 npm run build      # production build + package.zip
 npm run typecheck  # tsc --noEmit
-npm run icon       # regenerate assets/icon.png and compress assets/preview.png
+npm run icon       # regenerate assets/icon.png and assets/preview.png
+npm run preview    # re-shoot assets/preview.png from assets/preview.html
 ```
+
+`npm run icon` and `npm run preview` shoot the preview with Playwright, so run `npm install` followed by `npx playwright install chromium` once before the first preview build. Every other script works without it.
 
 ## License
 

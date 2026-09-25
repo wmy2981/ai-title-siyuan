@@ -134,8 +134,11 @@ npm run build
 npm run dev        # 改动时重新构建
 npm run build      # 生产构建 + package.zip
 npm run typecheck  # tsc --noEmit
-npm run icon       # 重新生成 assets/icon.png 并压缩 assets/preview.png
+npm run icon       # 重新生成 assets/icon.png 和 assets/preview.png
+npm run preview    # 仅按 assets/preview.html 重拍 assets/preview.png
 ```
+
+`npm run icon` 和 `npm run preview` 用 Playwright 拍摄预览图，首次使用前先执行 `npm install`，再执行 `npx playwright install chromium`。其余脚本都不依赖它。
 
 ## 许可
 
