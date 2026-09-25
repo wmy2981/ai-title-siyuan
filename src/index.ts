@@ -16,7 +16,7 @@ import {
     type PluginSettings,
 } from "./config";
 import {getDocTitle} from "./content";
-import {debug, setDebug} from "./debug";
+import {debug, debugJson, setDebug} from "./debug";
 import {makeT, type T} from "./i18n";
 import {generateTitles, type GenerateOutcome, type NoteResult} from "./pipeline";
 import {openSettingsPanel} from "./settings-panel";
@@ -54,11 +54,13 @@ export default class AiTitlePlugin extends Plugin {
 
     /** 配置被同步或覆盖后重新读取，避免内存里的旧值被写回。 */
     async onDataChanged(): Promise<void> {
+        debug("Data changed, reloading settings");
         await this.loadSettings();
         this.syncUiEntries();
     }
 
     async onunload(): Promise<void> {
+        debug("Plugin unloaded");
         this.removeTopBarEntry();
         this.removeBreadcrumbEntry();
     }
@@ -71,9 +73,18 @@ export default class AiTitlePlugin extends Plugin {
                 this.settings = next;
                 setDebug(next.ui.debug);
                 await this.saveData(STORAGE_NAME, next);
+                debugJson("Settings saved", this.redactedSettings(next));
                 this.syncUiEntries();
             },
         });
+    }
+
+    /** 调试日志要能对账「这次到底用了什么」，但密钥不进日志。 */
+    private redactedSettings(settings: PluginSettings): PluginSettings {
+        return {
+            ...settings,
+            api: {...settings.api, apiKey: settings.api.apiKey === "" ? "" : "(redacted)"},
+        };
     }
 
     private async loadSettings(): Promise<void> {
@@ -91,6 +102,7 @@ export default class AiTitlePlugin extends Plugin {
             );
         }
         debug(`Settings loaded (debug mode on)`);
+        debugJson("Settings loaded", this.redactedSettings(this.settings));
     }
 
     /** 三个界面开关的当前状态同步到实际注册的入口上。 */
@@ -122,7 +134,7 @@ export default class AiTitlePlugin extends Plugin {
                     showMessage(this.t("noActiveNote"), 6000, "error");
                     return;
                 }
-                void this.runGeneration([id]);
+                void this.runGeneration([id], "topbar");
             },
         });
     }
@@ -151,7 +163,7 @@ export default class AiTitlePlugin extends Plugin {
                     showMessage(this.t("noActiveNote"), 6000, "error");
                     return;
                 }
-                void this.runGeneration([id]);
+                void this.runGeneration([id], "breadcrumb");
             },
         });
         this.breadcrumbRegistered = true;
@@ -179,7 +191,7 @@ export default class AiTitlePlugin extends Plugin {
                     showMessage(this.t("noActiveNote"), 6000, "error");
                     return;
                 }
-                void this.runGeneration([id]);
+                void this.runGeneration([id], "command");
             },
         });
     }
@@ -209,7 +221,7 @@ export default class AiTitlePlugin extends Plugin {
             menu.addItem({
                 icon: ICON_ID,
                 label: ids.length === 1 ? this.t("actionSingle") : this.t("actionMultiple", {count: ids.length}),
-                click: () => void this.runGeneration(ids),
+                click: () => void this.runGeneration(ids, "doc-tree"),
             });
         };
 
@@ -217,13 +229,16 @@ export default class AiTitlePlugin extends Plugin {
     }
 
     /** 四个入口共用的执行路径：取正文 → 并发请求 → 弹窗或直接应用。 */
-    private async runGeneration(ids: string[]): Promise<void> {
+    private async runGeneration(ids: string[], source: string): Promise<void> {
         const {api, behavior} = this.settings;
+        debug(`Generation requested from "${source}" for ${ids.length} note(s): ${ids.join(", ")}`);
         if (!hasProviderConfig(api)) {
             showMessage(this.t("noProvider"), 6000, "error");
             return;
         }
-        debug(`Generation started for ${ids.length} note(s): ${ids.join(", ")}`);
+        // 记下这次真正生效的参数：配置项多了以后，「我明明改了」和「实际发出去的是什么」
+        // 是两件事
+        debugJson("Settings in effect", this.redactedSettings(this.settings));
 
         try {
             const outcome = await generateTitles({
@@ -269,11 +284,13 @@ export default class AiTitlePlugin extends Plugin {
             (this.settings.behavior.autoApply === "single" && ids.length === 1);
 
         if (mayApplySilently && batchErrors.length === 0) {
+            debug("Auto-apply allows it: writing titles back without the review dialog");
             await applyGeneratedSilently(this.t, results, notes);
             this.reportFailures(results, notes);
             return;
         }
 
+        debug("Opening the review dialog");
         openGenerateDialog({
             t: this.t,
             results,
@@ -326,6 +343,10 @@ export default class AiTitlePlugin extends Plugin {
         if (failed.length === 0) {
             return;
         }
+        debug(
+            `${failed.length} note(s) have no title`,
+            failed.map((result) => `${result.id}: ${result.reason ?? "unknown"}`).join(", "),
+        );
         const label = (id: string): string => notes.get(id)?.title ?? id;
         const missing = failed.filter((result) =>
             result.reason === "notReturned" || result.reason === "parseFailed");

@@ -311,7 +311,7 @@ export async function chat(
             return {text, reasoning: reasoningTrace(response.body)};
         }
         // 返回体合法但没有文本，多半是推理耗尽了输出预算，重发无意义
-        debugError("Response contained no text", response.body.slice(0, 500));
+        debugError("Response contained no text", response.body);
         throw new ApiError(EMPTY_CONTENT, false);
     }
 

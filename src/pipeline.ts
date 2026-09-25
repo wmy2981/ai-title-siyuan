@@ -68,9 +68,7 @@ async function loadContents(ids: string[], behavior: BehaviorSettings): Promise<
     const contents: NoteContent[] = [];
     for (const id of ids) {
         try {
-            const content = await fetchNoteContent(id, behavior);
-            debug(`Loaded note ${id}: body ${content.body.length} chars, toc ${content.toc.split("\n").filter((line) => line !== "").length} heading(s)${content.truncated ? ", truncated" : ""}${content.empty ? ", empty, will be skipped" : ""}`);
-            contents.push(content);
+            contents.push(await fetchNoteContent(id, behavior));
         } catch (error) {
             debugError(`Failed to load note ${id}`, error);
             contents.push({id, title: "", body: "", toc: "", truncated: false, empty: true, message: messageOf(error)});
@@ -90,7 +88,10 @@ async function generateBatch(
     behavior: BehaviorSettings,
 ): Promise<{results: NoteResult[]; reasoning?: ReasoningTrace}> {
     const {system, user} = renderPrompt(batch, behavior);
+    debug(`Batch of ${batch.length} note(s) [${batch.map((note) => note.id).join(", ")}]: system ${system.length} chars, user ${user.length} chars`);
+    const started = Date.now();
     const result = await chat({system, user}, api, behavior);
+    debug(`Batch replied in ${Date.now() - started}ms`);
     // 解析失败也要把推理痕迹带出去：模型一边推理一边漏答，恰恰是最该提示的情况
     const reasoning = result.reasoning;
 

@@ -4,7 +4,15 @@
  * Disabled by default. When the user turns on "Debug mode" in the settings
  * panel, every outbound request, every raw model response and every pipeline
  * decision is written to the console so a misconfiguration can be diagnosed
- * without guessing. All output is in English.
+ * without guessing.
+ *
+ * Nothing here is truncated: a cut-off payload hides exactly the field that
+ * caused the problem, and the reader cannot tell whether the log ended because
+ * the value did. The cost is only paid when the switch is on.
+ *
+ * The API key is never logged: it travels in a header, not in the request body,
+ * and the settings snapshot printed at the start of a run is redacted.
+ * All output is in English.
  */
 
 let enabled = false;
@@ -19,6 +27,11 @@ export function isDebug(): boolean {
 
 function stamp(): string {
     return new Date().toISOString().slice(11, 23);
+}
+
+/** Indent a multi-line block so it reads as one entry under its own heading. */
+function indent(text: string): string {
+    return text.split("\n").map((line) => `    ${line}`).join("\n");
 }
 
 /** Log a single pipeline step. No-op unless debug mode is on. */
@@ -41,43 +54,47 @@ export function debugError(message: string, error: unknown): void {
     console.error(`[ai-title ${stamp()}] ${message}`, error);
 }
 
-function truncate(value: string, limit: number): string {
-    return value.length <= limit ? value : `${value.slice(0, limit)}… (${value.length} chars total)`;
-}
-
-/** Pretty-print one message for the conversation dump. */
-function formatMessage(role: string, content: string): string {
-    const limit = role === "system" ? 2000 : 4000;
-    return `  [${role}]\n${truncate(content, limit).split("\n").map((line) => `    ${line}`).join("\n")}`;
+/**
+ * Dump a value as JSON, in full.
+ *
+ * Used for the settings a run actually used and for the per-note decisions the
+ * pipeline made, so a report can be reconstructed from the console alone.
+ */
+export function debugJson(label: string, value: unknown): void {
+    if (!enabled) {
+        return;
+    }
+    const text = JSON.stringify(value, null, 2) ?? String(value);
+    console.log(`[ai-title ${stamp()}] ${label}:\n${indent(text)}`);
 }
 
 /**
- * Dump the full conversation sent to the model.
- * The request payload is logged verbatim so the reader sees the exact wire body,
- * including any thinking-suppression fields.
+ * Dump the full conversation sent to the model: the exact request body first,
+ * then a decoded view of the messages, which is easier to read than the JSON
+ * escaping of a long prompt.
  */
 export function debugRequest(url: string, payload: Record<string, unknown>): void {
     if (!enabled) {
         return;
     }
-    const {messages, ...rest} = payload as {messages?: {role: string; content: string}[]} & Record<string, unknown>;
+    const messages = (payload as {messages?: {role: string; content: string}[]}).messages ?? [];
     const lines = [
         `POST ${url}`,
-        "  -- request parameters --",
-        `  ${JSON.stringify(rest, null, 2).split("\n").join("\n  ")}`,
-        `  -- messages (${messages?.length ?? 0}) --`,
-        ...(messages ?? []).map((message) => formatMessage(message.role, message.content)),
+        "  -- request body (verbatim) --",
+        indent(JSON.stringify(payload, null, 2)),
+        `  -- decoded messages (${messages.length}) --`,
+        ...messages.map((message) => `  [${message.role}]\n${indent(message.content)}`),
     ];
     console.log(`[ai-title ${stamp()}] Full conversation sent to the model:\n${lines.join("\n")}`);
 }
 
-/** Log an HTTP response summary plus the raw body. */
+/** Log an HTTP response summary plus the complete raw body. */
 export function debugResponse(url: string, status: number, body: string): void {
     if (!enabled) {
         return;
     }
     console.log(
-        `[ai-title ${stamp()}] Response from ${url} (HTTP ${status}):\n${truncate(body, 4000).split("\n").map((line) => `    ${line}`).join("\n")}`,
+        `[ai-title ${stamp()}] Response from ${url} (HTTP ${status}, ${body.length} chars):\n${indent(body)}`,
     );
 }
 
@@ -86,5 +103,5 @@ export function debugModelText(text: string): void {
     if (!enabled) {
         return;
     }
-    console.log(`[ai-title ${stamp()}] Model text output:\n${text.split("\n").map((line) => `    ${line}`).join("\n")}`);
+    console.log(`[ai-title ${stamp()}] Model text output (${text.length} chars):\n${indent(text)}`);
 }

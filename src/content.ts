@@ -18,6 +18,7 @@ import {
     type MediaMode,
     type TruncateMode,
 } from "./config";
+import {debug} from "./debug";
 
 export interface NoteContent {
     id: string;
@@ -287,5 +288,11 @@ export async function fetchNoteContent(id: string, behavior: BehaviorSettings): 
     // 目录里的标题跟随同一个开关，与正文保持一致
     const toc = outline === "" || title === "" ? outline : `# ${title}\n${outline}`;
 
+    debug(
+        `Note ${id}: exported ${raw.length} chars, after media handling ${cleaned.length}, ` +
+        `title ${title === "" ? "(none)" : `"${title}"`}, body ${body.length} chars${truncated ? ` (truncated from ${titled.length})` : ""}, ` +
+        `outline ${wantsToc ? `${toc.split("\n").filter((line) => line !== "").length} heading(s)` : "not requested"}, ` +
+        `substance ${empty ? "none" : "yes"}`,
+    );
     return {id, title, body, toc, truncated, empty};
 }

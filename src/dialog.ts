@@ -7,6 +7,7 @@
 import {Dialog, showMessage} from "siyuan";
 import {applyTitles} from "./apply";
 import type {ApiSettings, BehaviorSettings} from "./config";
+import {debug} from "./debug";
 import type {T} from "./i18n";
 import {regenerateTitle, type NoteResult} from "./pipeline";
 
@@ -183,6 +184,7 @@ export function openGenerateDialog(options: GenerateDialogOptions): void {
         const row: Row = {id: result.id, result, checkbox, input, status, element: rowElement};
 
         regenButton.addEventListener("click", async () => {
+            debug(`Regenerating title for ${result.id}`);
             setBusy(true);
             try {
                 const next = await regenerateTitle(result.id, api, behavior);
@@ -262,7 +264,9 @@ export function openGenerateDialog(options: GenerateDialogOptions): void {
             return;
         }
         apply.disabled = true;
+        debug(`Applying ${edits.length} edited title(s): ${edits.map((edit) => edit.id).join(", ")}`);
         const outcome = await applyTitles(edits);
+        debug(`Apply finished: ${outcome.applied.length} applied, ${outcome.failed.length} failed`);
         dialog.destroy();
         reportApplyFailures(t, outcome.failed, titleOf);
         reportApplied(t, outcome.applied.length);
@@ -283,6 +287,7 @@ export async function applyGeneratedSilently(
         .map((result) => ({id: result.id, title: result.title}));
 
     const outcome = await applyTitles(edits);
+    debug(`Silent apply finished: ${outcome.applied.length} applied, ${outcome.failed.length} failed`);
     reportApplyFailures(t, outcome.failed, (id) => notes.get(id)?.title ?? id);
     reportApplied(t, outcome.applied.length);
 }
