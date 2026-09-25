@@ -68,6 +68,15 @@ export const MEDIA_OPTIONS = [MEDIA_DROP, MEDIA_PLACEHOLDER, MEDIA_RAW] as const
 /** 正文里链接、图片、音视频与 iframe 的处理方式。 */
 export type MediaMode = (typeof MEDIA_OPTIONS)[number];
 
+export const TRUNCATE_HEAD = "head";
+export const TRUNCATE_TAIL = "tail";
+export const TRUNCATE_BOTH = "both";
+export const TRUNCATE_FULL = "full";
+export const TRUNCATE_OPTIONS = [TRUNCATE_HEAD, TRUNCATE_TAIL, TRUNCATE_BOTH, TRUNCATE_FULL] as const;
+
+/** 正文超出长度上限时的截取方式。 */
+export type TruncateMode = (typeof TRUNCATE_OPTIONS)[number];
+
 export interface ApiSettings {
     /** 协议。当前仅实现 "openai"（Chat Completions），预留扩展 Responses API。 */
     protocol: string;
@@ -94,6 +103,10 @@ export interface BehaviorSettings {
     retries: number;
     /** 单篇笔记传入的最大字符数，超出则丢尾部。 */
     contentLimit: number;
+    /** 超出长度上限时的截取方式。 */
+    truncateMode: TruncateMode;
+    /** 「开头 + 末尾」时开头所占比例，0 到 1。 */
+    truncateHeadRatio: number;
     /** 链接、图片、音视频与 iframe 的处理方式。 */
     mediaMode: MediaMode;
     /** 单次请求最多传入几篇笔记。 */
@@ -169,6 +182,8 @@ export const DEFAULT_SETTINGS: PluginSettings = {
         timeout: 10000,
         retries: 1,
         contentLimit: 1000,
+        truncateMode: TRUNCATE_HEAD,
+        truncateHeadRatio: 0.5,
         mediaMode: MEDIA_PLACEHOLDER,
         batchSize: 3,
         concurrency: 3,

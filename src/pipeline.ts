@@ -68,11 +68,11 @@ async function loadContents(ids: string[], behavior: BehaviorSettings): Promise<
     for (const id of ids) {
         try {
             const content = await fetchNoteContent(id, behavior);
-            debug(`Loaded note ${id}: ${content.body.length} chars${content.empty ? " (empty, will be skipped)" : ""}`);
+            debug(`Loaded note ${id}: ${content.body.length} chars${content.truncated ? " (truncated)" : ""}${content.empty ? " (empty, will be skipped)" : ""}`);
             contents.push(content);
         } catch (error) {
             debugError(`Failed to load note ${id}`, error);
-            contents.push({id, body: "", empty: true, message: messageOf(error)});
+            contents.push({id, body: "", truncated: false, empty: true, message: messageOf(error)});
         }
     }
     return contents;

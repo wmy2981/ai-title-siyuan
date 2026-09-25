@@ -6,12 +6,23 @@
  * 需要正则剥离且可能误伤正文里合法的花括号内容，而前者直接产出干净 Markdown。
  */
 import {fetchSyncPost} from "siyuan";
-import {MEDIA_DROP, MEDIA_RAW, type BehaviorSettings, type MediaMode} from "./config";
+import {
+    MEDIA_DROP,
+    MEDIA_RAW,
+    TRUNCATE_FULL,
+    TRUNCATE_HEAD,
+    TRUNCATE_TAIL,
+    type BehaviorSettings,
+    type MediaMode,
+    type TruncateMode,
+} from "./config";
 
 export interface NoteContent {
     id: string;
-    /** 笔记正文，对应提示词里的 <body>：已剥离本地资源引用并截断。 */
+    /** 笔记正文，对应提示词里的 <body>：已按设置处理媒体引用并截取。 */
     body: string;
+    /** 正文是否按长度上限截取过，目录按需传入时据此判断。 */
+    truncated: boolean;
     /** 正文是否为空，用于跳过不请求。 */
     empty: boolean;
     /** 仅当抓取本身失败时存在，此时 body 为空、empty 为 true。 */
@@ -97,12 +108,46 @@ function normalizeWhitespace(markdown: string): string {
         .trim();
 }
 
-/** 按字符数从尾部截断。标题只需要开头的主题信息，所以保留开头。 */
-export function truncate(text: string, limit: number): string {
-    if (limit <= 0 || text.length <= limit) {
+/**
+ * 「开头 + 末尾」时插在两段之间的标记。
+ *
+ * 没有它，模型会把断开的两段当成一句话读：上一段末尾的句子可能正好是
+ * 下一段的铺垫，拼起来的意思完全不同。标记本身也占长度额度，先扣掉再分配。
+ */
+const TRUNCATION_MARKER = "\n\n[...]\n\n";
+
+function clampRatio(ratio: number): number {
+    if (!Number.isFinite(ratio)) {
+        return 0.5;
+    }
+    return Math.min(1, Math.max(0, ratio));
+}
+
+/**
+ * 按设置截取正文。
+ *
+ * 四种方式都保证结果不超过 limit 个字符（limit <= 0 视为不限制）：
+ * both 模式先扣掉标记自身的长度，再按比例把剩余额度分给开头与末尾，
+ * 两段相加正好用完额度，不会多出一个字符。
+ */
+export function truncate(text: string, mode: TruncateMode, limit: number, headRatio: number): string {
+    if (mode === TRUNCATE_FULL || limit <= 0 || text.length <= limit) {
         return text;
     }
-    return text.slice(0, limit);
+    if (mode === TRUNCATE_TAIL) {
+        return text.slice(text.length - limit);
+    }
+    if (mode === TRUNCATE_HEAD) {
+        // 标题只需要开头的主题信息，所以默认保留开头
+        return text.slice(0, limit);
+    }
+    const budget = limit - TRUNCATION_MARKER.length;
+    if (budget <= 0) {
+        return text.slice(0, limit);
+    }
+    const head = Math.round(budget * clampRatio(headRatio));
+    const tail = budget - head;
+    return `${text.slice(0, head)}${TRUNCATION_MARKER}${tail === 0 ? "" : text.slice(text.length - tail)}`;
 }
 
 /** 去掉 Markdown 结构字符后判断是否真的还有内容。 */
@@ -150,6 +195,7 @@ export async function fetchNoteContent(id: string, behavior: BehaviorSettings): 
     }
 
     const raw = response.data?.content ?? "";
-    const cleaned = truncate(normalizeWhitespace(replaceMedia(raw, behavior.mediaMode)), behavior.contentLimit);
-    return {id, body: cleaned, empty: !hasSubstance(cleaned)};
+    const cleaned = normalizeWhitespace(replaceMedia(raw, behavior.mediaMode));
+    const body = truncate(cleaned, behavior.truncateMode, behavior.contentLimit, behavior.truncateHeadRatio);
+    return {id, body, truncated: body.length < cleaned.length, empty: !hasSubstance(body)};
 }

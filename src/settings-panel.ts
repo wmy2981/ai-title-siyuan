@@ -23,9 +23,15 @@ import {
     MEDIA_OPTIONS,
     MEDIA_PLACEHOLDER,
     MEDIA_RAW,
+    TRUNCATE_BOTH,
+    TRUNCATE_FULL,
+    TRUNCATE_HEAD,
+    TRUNCATE_OPTIONS,
+    TRUNCATE_TAIL,
     type AutoApply,
     type MediaMode,
     type PluginSettings,
+    type TruncateMode,
 } from "./config";
 import {setDebug} from "./debug";
 import type {T} from "./i18n";
@@ -98,8 +104,9 @@ function labelBlock(title: string, description: string): HTMLElement {
  * 左标题右控件。
  * 开关交给思源自己渲染：Setting 见到含 b3-switch 的行会把它变成 label，
  * 整行可点即可切换；其余控件补 fn__size200 保持设置页统一的控件宽度。
+ * 返回整行，便于调用方按条件隐藏（如「保留开头和末尾」才需要比例输入）。
  */
-function rowItem(items: HTMLElement, title: string, description: string, field: HTMLElement): void {
+function rowItem(items: HTMLElement, title: string, description: string, field: HTMLElement): HTMLElement {
     const isSwitch = field.classList.contains("b3-switch");
     const row = document.createElement(isSwitch ? "label" : "div");
     row.className = "fn__flex b3-label config-item";
@@ -117,6 +124,7 @@ function rowItem(items: HTMLElement, title: string, description: string, field: 
 
     row.append(main, space, field);
     items.append(row);
+    return row;
 }
 
 /** 标题在上、控件占满整行。文本域和「下拉 + 附加输入」这类组合控件用这个。 */
@@ -294,6 +302,11 @@ function parseNumber(raw: string, fallback: number): number {
 
 function parsePositive(raw: string, fallback: number): number {
     return Math.max(1, parseNumber(raw, fallback));
+}
+
+/** 比例一律夹到 0 到 1，手滑输入 5 或 -1 时不该把额度算飞。 */
+function parseRatio(raw: string, fallback: number): number {
+    return Math.min(1, Math.max(0, parseNumber(raw, fallback)));
 }
 
 /** 空字符串代表「不发送该参数」，必须与数字 0 区分开。 */
@@ -652,6 +665,41 @@ function buildBehaviorGroup(root: HTMLElement, t: T, settings: PluginSettings): 
         contentLimit.value = String(behavior.contentLimit);
     });
     rowItem(items, t("contentLimit"), t("contentLimitDesc"), contentLimit);
+
+    const truncateMode = select();
+    const truncateLabels: Record<TruncateMode, string> = {
+        [TRUNCATE_HEAD]: t("truncateHead"),
+        [TRUNCATE_TAIL]: t("truncateTail"),
+        [TRUNCATE_BOTH]: t("truncateBoth"),
+        [TRUNCATE_FULL]: t("truncateFull"),
+    };
+    for (const value of TRUNCATE_OPTIONS) {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = truncateLabels[value];
+        truncateMode.append(option);
+    }
+
+    const headRatio = numberInput(0.05);
+    headRatio.addEventListener("input", () => {
+        behavior.truncateHeadRatio = parseRatio(headRatio.value, DEFAULT_SETTINGS.behavior.truncateHeadRatio);
+    });
+    const ratioRow = rowItem(items, t("truncateHeadRatio"), t("truncateHeadRatioDesc"), headRatio);
+    // 比例只在「开头 + 末尾」下有意义，其余档位留着一个不起作用的输入框只会让人猜
+    const syncRatio = (): void => {
+        ratioRow.classList.toggle("fn__none", behavior.truncateMode !== TRUNCATE_BOTH);
+    };
+
+    truncateMode.addEventListener("change", () => {
+        behavior.truncateMode = truncateMode.value as TruncateMode;
+        syncRatio();
+    });
+    syncs.push(() => {
+        truncateMode.value = behavior.truncateMode;
+        headRatio.value = String(behavior.truncateHeadRatio);
+        syncRatio();
+    });
+    rowItem(items, t("truncateMode"), t("truncateModeDesc"), truncateMode);
 
     const media = select();
     const mediaLabels: Record<MediaMode, string> = {
