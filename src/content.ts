@@ -197,35 +197,67 @@ async function readTitle(id: string): Promise<string> {
     }
 }
 
-/** /api/outline/getDocOutline 返回的标题树节点，只取用得上的字段。 */
-interface OutlineNode {
+/**
+ * /api/outline/getDocOutline 的返回结构，与内核 model/outline.go 的 outline() 一致。
+ *
+ * 顶层是 Path 数组，标题文本在 `name` 里；每个 Path 的子标题挂在 `blocks` 里，
+ * 而 Block 的标题文本在 `content` 里、下一层又是 `children`。
+ * 两边字段名不一样：照着 `children` 去 Path 上找，只能拿到文档的第一个标题，
+ * 后面整棵子树都会静默丢掉。
+ */
+interface OutlineBlock {
+    content?: string;
+    subType?: string;
+    children?: OutlineBlock[];
+}
+
+interface OutlinePath {
     name?: string;
     subType?: string;
-    depth?: number;
-    children?: OutlineNode[];
+    blocks?: OutlineBlock[];
 }
 
 /**
- * 把标题树摊平成 Markdown 目录。
+ * 标题层级：以 subType（h1 到 h6）为准，接口没给时才退回上一级 + 1。
  *
- * 层级以 subType（h1 到 h6）为准；万一接口没给这个字段，
- * 退回按嵌套深度推断 —— 大纲里的深度就是用户看到的层级。
+ * 不能用 Path 上的 depth —— 那是相对嵌套深度，文档第一个标题就是 h3 时它是 0，
+ * 直接当层级用会把 h3 写成 `#`。
  */
-function outlineToMarkdown(nodes: OutlineNode[]): string {
+function headingLevel(subType: string | undefined, fallback: number): number {
+    const matched = /^h([1-6])$/i.exec(subType ?? "")?.[1];
+    return matched === undefined ? Math.min(6, Math.max(1, fallback)) : Number(matched);
+}
+
+/** 把标题树摊平成 Markdown 目录，逐层跟随每条标题的真实层级。 */
+function outlineToMarkdown(paths: OutlinePath[]): string {
     const lines: string[] = [];
-    const walk = (items: OutlineNode[], depth: number): void => {
-        for (const item of items) {
-            const name = (item.name ?? "").trim();
-            const level = Number(/^h([1-6])$/i.exec(item.subType ?? "")?.[1] ?? Math.min(6, depth + 1));
+    // 大纲名称是按 HTML 渲染的（Path 的 nameIsHTML 为 true，带样式的标题会裹上 span），
+    // 目录要的是纯文本，标签只会白占 token
+    const clean = (text: string | undefined): string => (text ?? "").replace(/<[^>]*>/g, "").trim();
+
+    const walkBlocks = (blocks: OutlineBlock[], parentLevel: number): void => {
+        for (const block of blocks) {
+            const level = headingLevel(block.subType, parentLevel + 1);
+            const name = clean(block.content);
             if (name !== "") {
                 lines.push(`${"#".repeat(level)} ${name}`);
             }
-            if (item.children && item.children.length > 0) {
-                walk(item.children, depth + 1);
+            if (block.children && block.children.length > 0) {
+                walkBlocks(block.children, level);
             }
         }
     };
-    walk(nodes, 0);
+
+    for (const path of paths) {
+        const level = headingLevel(path.subType, 1);
+        const name = clean(path.name);
+        if (name !== "") {
+            lines.push(`${"#".repeat(level)} ${name}`);
+        }
+        if (path.blocks && path.blocks.length > 0) {
+            walkBlocks(path.blocks, level);
+        }
+    }
     return lines.join("\n");
 }
 
@@ -240,7 +272,7 @@ async function readOutline(id: string): Promise<string> {
     try {
         const response = (await fetchSyncPost("/api/outline/getDocOutline", {id})) as {
             code: number;
-            data?: OutlineNode[];
+            data?: OutlinePath[];
         };
         return response.code === 0 ? outlineToMarkdown(response.data ?? []) : "";
     } catch {
