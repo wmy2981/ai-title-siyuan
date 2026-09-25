@@ -812,23 +812,23 @@ function buildBehaviorGroup(root: HTMLElement, t: T, settings: PluginSettings): 
     });
     rowItem(items, t("titleStyle"), t("titleStyleDesc"), style);
 
-    const systemPrompt = textarea(6);
-    systemPrompt.addEventListener("input", () => {
-        behavior.systemPrompt = systemPrompt.value;
+    const systemExtra = textarea(3);
+    systemExtra.addEventListener("input", () => {
+        behavior.systemExtra = systemExtra.value;
     });
     syncs.push(() => {
-        systemPrompt.value = behavior.systemPrompt;
+        systemExtra.value = behavior.systemExtra;
     });
-    stackItem(items, t("systemPrompt"), t("systemPromptDesc"), systemPrompt);
+    stackItem(items, t("systemExtra"), t("systemExtraDesc"), systemExtra);
 
-    const userPrompt = textarea(5);
-    userPrompt.addEventListener("input", () => {
-        behavior.userPrompt = userPrompt.value;
+    const userExtra = textarea(3);
+    userExtra.addEventListener("input", () => {
+        behavior.userExtra = userExtra.value;
     });
     syncs.push(() => {
-        userPrompt.value = behavior.userPrompt;
+        userExtra.value = behavior.userExtra;
     });
-    stackItem(items, t("userPrompt"), t("userPromptDesc"), userPrompt);
+    stackItem(items, t("userExtra"), t("userExtraDesc"), userExtra);
 
     return () => syncs.forEach((sync) => sync());
 }

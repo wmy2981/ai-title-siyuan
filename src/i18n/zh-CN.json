@@ -85,10 +85,10 @@
   "titleStyle": "标题风格",
   "titleStyleDesc": "填入 {{style}} 占位符",
 
-  "systemPrompt": "系统提示词",
-  "systemPromptDesc": "硬性规定，核心是要求模型只返回一个合法的 JSON 对象",
-  "userPrompt": "用户提示词",
-  "userPromptDesc": "任务与偏好设置。占位符：{{content}}、{{language}}、{{style}}",
+  "systemExtra": "追加系统提示词",
+  "systemExtraDesc": "附加在内置系统提示词的末尾。系统提示词固定不可改：它定义了插件解析返回值所依赖的 JSON 格式约定",
+  "userExtra": "追加用户提示词",
+  "userExtraDesc": "附加在用户提示词末尾，位于笔记内容之后",
 
   "showTopBar": "显示顶栏按钮",
   "showTopBarDesc": "在顶栏添加为当前笔记生成标题的按钮",

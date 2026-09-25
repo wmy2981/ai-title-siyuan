@@ -18,7 +18,7 @@ This plugin does the naming pass for you. It reads each note's content, asks a m
 
 - **Generate in bulk.** Select many notes in the document tree and title them in one action. Notes are split into batches and the batches run concurrently.
 - **Review before writing.** Every title stays editable. Untick what you don't want, edit any field, or regenerate a single row.
-- **Your prompts, your style.** Rewrite both the system and user prompt. `{{content}}`, `{{language}}` and `{{style}}` are filled in per request.
+- **Your style, not the contract.** The system and user prompts are fixed because they carry the JSON contract the plugin parses. Put your own requirements in the `{{system}}` and `{{user}}` append slots; `{{content}}`, `{{language}}` and `{{style}}` are filled in per request.
 - **Any compatible endpoint.** Point it at any OpenAI-compatible chat completions API, or import a provider you already configured in SiYuan.
 - **Turn reasoning off.** Built-in request body presets for Qwen, vLLM, Doubao and others, plus a free-form JSON option.
 - **Built for debugging.** Debug mode dumps the full request and response to the console.

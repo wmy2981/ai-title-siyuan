@@ -5,8 +5,10 @@
  *   {{content}}  拼装好的笔记列表
  *   {{language}} 行为配置里的「标题语言」
  *   {{style}}    行为配置里的「标题风格」
+ *   {{system}}   追加到系统提示词末尾的自定义说明
+ *   {{user}}     追加到用户提示词末尾的自定义说明
  */
-import type {BehaviorSettings} from "./config";
+import {DEFAULT_SYSTEM_PROMPT, DEFAULT_USER_PROMPT, type BehaviorSettings} from "./config";
 
 export interface NoteText {
     id: string;
@@ -53,9 +55,12 @@ export function renderPrompt(
         content: buildContent(notes),
         language: behavior.titleLanguage,
         style: behavior.titleStyle,
+        system: behavior.systemExtra,
+        user: behavior.userExtra,
     };
+    // 追加位为空时模板末尾会留下空行，去掉后再发出去
     return {
-        system: fill(behavior.systemPrompt, values),
-        user: fill(behavior.userPrompt, values),
+        system: fill(DEFAULT_SYSTEM_PROMPT, values).trim(),
+        user: fill(DEFAULT_USER_PROMPT, values).trim(),
     };
 }

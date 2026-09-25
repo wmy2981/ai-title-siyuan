@@ -128,8 +128,10 @@ export interface BehaviorSettings {
     autoApply: AutoApply;
     titleLanguage: string;
     titleStyle: string;
-    systemPrompt: string;
-    userPrompt: string;
+    /** 追加到系统提示词末尾的内容，对应 {{system}}。 */
+    systemExtra: string;
+    /** 追加到用户提示词末尾的内容，对应 {{user}}。 */
+    userExtra: string;
 }
 
 export interface UiSettings {
@@ -151,6 +153,10 @@ export const STORAGE_NAME = "settings";
 /**
  * 系统提示词只有硬性规定：返回格式、id 对应关系、标题形态。
  * 风格与语言偏好放在用户提示词里。
+ *
+ * 两份提示词都是固定的，设置页不再允许改写：它们定义了插件解析返回值所依赖的
+ * JSON 契约，被改坏之后症状是「模型答了但插件读不出来」，用户很难自查。
+ * 需要额外要求时用末尾的 {{system}} 与 {{user}} 追加。
  */
 export const DEFAULT_SYSTEM_PROMPT = `You are a note title generator. Given one or more notes, produce a concise, accurate title for each.
 
@@ -167,14 +173,18 @@ Rules:
 - Return exactly one entry per note provided.
 - The title must be plain text, no markdown, no surrounding quotes.
 - Never invent, translate, or alter a note id.
-- Output the raw JSON object only. No markdown fences, no explanation, no text before or after.`;
+- Output the raw JSON object only. No markdown fences, no explanation, no text before or after.
+
+{{system}}`;
 
 export const DEFAULT_USER_PROMPT = `Generate a title for each of the following notes, one title per note, following the instructions in the system prompt. Return a valid JSON object.
 
 Language: {{language}}
 Style: {{style}}
 
-{{content}}`;
+{{content}}
+
+{{user}}`;
 
 export const DEFAULT_SETTINGS: PluginSettings = {
     api: {
@@ -204,8 +214,8 @@ export const DEFAULT_SETTINGS: PluginSettings = {
         autoApply: AUTO_APPLY_NEVER,
         titleLanguage: "中文",
         titleStyle: "简洁准确，拒绝套话",
-        systemPrompt: DEFAULT_SYSTEM_PROMPT,
-        userPrompt: DEFAULT_USER_PROMPT,
+        systemExtra: "",
+        userExtra: "",
     },
     ui: {
         showTopBar: true,
@@ -241,9 +251,14 @@ export function mergeSettings(stored: unknown): PluginSettings {
     }
     api.disableThinking = DEFAULT_SETTINGS.api.disableThinking;
     api.customThinking = "";
+    const behavior = {...DEFAULT_SETTINGS.behavior, ...(raw.behavior ?? {})};
+    // 旧版允许直接改写完整提示词。现在两份提示词固定，只有追加位可用，
+    // 旧值一律删掉：留着一个不再被读取的字段，只会让人以为它还生效。
+    delete (behavior as Record<string, unknown>).systemPrompt;
+    delete (behavior as Record<string, unknown>).userPrompt;
     return {
         api,
-        behavior: {...DEFAULT_SETTINGS.behavior, ...(raw.behavior ?? {})},
+        behavior,
         ui: {...DEFAULT_SETTINGS.ui, ...(raw.ui ?? {})},
     };
 }

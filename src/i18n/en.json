@@ -85,10 +85,10 @@
   "titleStyle": "Title style",
   "titleStyleDesc": "Filled into the {{style}} placeholder",
 
-  "systemPrompt": "System prompt",
-  "systemPromptDesc": "Hard requirements, above all that the model returns a single raw JSON object",
-  "userPrompt": "User prompt",
-  "userPromptDesc": "The task and its preferences. Placeholders: {{content}}, {{language}}, {{style}}",
+  "systemExtra": "Extra system instructions",
+  "systemExtraDesc": "Appended to the end of the built-in system prompt. That prompt is fixed because it defines the JSON contract the plugin parses",
+  "userExtra": "Extra user instructions",
+  "userExtraDesc": "Appended to the end of the user prompt, after the notes",
 
   "showTopBar": "Show toolbar button",
   "showTopBarDesc": "Adds a generate button to the top bar",
