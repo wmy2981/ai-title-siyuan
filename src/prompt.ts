@@ -12,6 +12,8 @@ export interface NoteText {
     id: string;
     /** 笔记正文。行为配置里的长度上限只作用于它，不含 id 与其他元信息。 */
     body: string;
+    /** 笔记目录。未启用目录时为空串，此时不产出 <toc> 元素。 */
+    toc: string;
 }
 
 /**
@@ -20,10 +22,16 @@ export interface NoteText {
  * 用 <note> 标签结构而不是 JSON：模型对标签结构的遵循度更稳定，
  * 且正文里的引号、花括号、代码片段都不需要转义。
  * 标签各自独占一行，正文的 Markdown 结构不会和标签抢行。
+ *
+ * 目录为空时整个 <toc> 元素都不产出：空标签只会白占 token，
+ * 还容易被模型当成「这篇笔记没有小标题」之外的暗示。
  */
 export function buildContent(notes: NoteText[]): string {
     return notes
-        .map((note) => `<note>\n<id>${note.id}</id>\n<body>\n${note.body}\n</body>\n</note>`)
+        .map((note) => {
+            const toc = note.toc.trim() === "" ? "" : `<toc>\n${note.toc}\n</toc>\n`;
+            return `<note>\n<id>${note.id}</id>\n${toc}<body>\n${note.body}\n</body>\n</note>`;
+        })
         .join("\n\n");
 }
 

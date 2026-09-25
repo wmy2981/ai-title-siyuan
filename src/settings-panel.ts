@@ -23,6 +23,10 @@ import {
     MEDIA_OPTIONS,
     MEDIA_PLACEHOLDER,
     MEDIA_RAW,
+    TOC_ALWAYS,
+    TOC_NEVER,
+    TOC_OPTIONS,
+    TOC_TRUNCATED,
     TRUNCATE_BOTH,
     TRUNCATE_FULL,
     TRUNCATE_HEAD,
@@ -31,6 +35,7 @@ import {
     type AutoApply,
     type MediaMode,
     type PluginSettings,
+    type TocMode,
     type TruncateMode,
 } from "./config";
 import {setDebug} from "./debug";
@@ -729,6 +734,26 @@ function buildBehaviorGroup(root: HTMLElement, t: T, settings: PluginSettings): 
         includeTitle.checked = behavior.includeTitle;
     });
     rowItem(items, t("includeTitle"), t("includeTitleDesc"), includeTitle);
+
+    const tocMode = select();
+    const tocLabels: Record<TocMode, string> = {
+        [TOC_NEVER]: t("tocNever"),
+        [TOC_TRUNCATED]: t("tocTruncated"),
+        [TOC_ALWAYS]: t("tocAlways"),
+    };
+    for (const value of TOC_OPTIONS) {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = tocLabels[value];
+        tocMode.append(option);
+    }
+    tocMode.addEventListener("change", () => {
+        behavior.tocMode = tocMode.value as TocMode;
+    });
+    syncs.push(() => {
+        tocMode.value = behavior.tocMode;
+    });
+    rowItem(items, t("tocMode"), t("tocModeDesc"), tocMode);
 
     const batchSize = numberInput();
     batchSize.addEventListener("input", () => {

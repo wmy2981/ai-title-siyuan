@@ -9,6 +9,8 @@ import {fetchSyncPost} from "siyuan";
 import {
     MEDIA_DROP,
     MEDIA_RAW,
+    TOC_ALWAYS,
+    TOC_TRUNCATED,
     TRUNCATE_FULL,
     TRUNCATE_HEAD,
     TRUNCATE_TAIL,
@@ -23,9 +25,11 @@ export interface NoteContent {
     title: string;
     /** 笔记正文，对应提示词里的 <body>：已按设置处理媒体引用并截取。 */
     body: string;
+    /** 笔记目录，对应提示词里的 <toc>：不截取；未启用或没有标题时为空串。 */
+    toc: string;
     /** 正文是否按长度上限截取过，目录按需传入时据此判断。 */
     truncated: boolean;
-    /** 正文是否为空，用于跳过不请求。只看正文，不含文档标题。 */
+    /** 正文是否为空，用于跳过不请求。只看正文，不含文档标题与目录。 */
     empty: boolean;
     /** 仅当抓取本身失败时存在，此时 body 为空、empty 为 true。 */
     message?: string;
@@ -183,6 +187,57 @@ async function readTitle(id: string): Promise<string> {
     }
 }
 
+/** /api/outline/getDocOutline 返回的标题树节点，只取用得上的字段。 */
+interface OutlineNode {
+    name?: string;
+    subType?: string;
+    depth?: number;
+    children?: OutlineNode[];
+}
+
+/**
+ * 把标题树摊平成 Markdown 目录。
+ *
+ * 层级以 subType（h1 到 h6）为准；万一接口没给这个字段，
+ * 退回按嵌套深度推断 —— 大纲里的深度就是用户看到的层级。
+ */
+function outlineToMarkdown(nodes: OutlineNode[]): string {
+    const lines: string[] = [];
+    const walk = (items: OutlineNode[], depth: number): void => {
+        for (const item of items) {
+            const name = (item.name ?? "").trim();
+            const level = Number(/^h([1-6])$/i.exec(item.subType ?? "")?.[1] ?? Math.min(6, depth + 1));
+            if (name !== "") {
+                lines.push(`${"#".repeat(level)} ${name}`);
+            }
+            if (item.children && item.children.length > 0) {
+                walk(item.children, depth + 1);
+            }
+        }
+    };
+    walk(nodes, 0);
+    return lines.join("\n");
+}
+
+/**
+ * 取笔记目录。
+ *
+ * 走大纲接口而不是从导出正文里抠 `#` 开头的行：正文里的代码块和引用里
+ * 到处都是 `#`，按行解析会把 shell 注释当成标题，给出的层级关系反而是错的。
+ * 目录失败不影响正文，返回空串即可。
+ */
+async function readOutline(id: string): Promise<string> {
+    try {
+        const response = (await fetchSyncPost("/api/outline/getDocOutline", {id})) as {
+            code: number;
+            data?: OutlineNode[];
+        };
+        return response.code === 0 ? outlineToMarkdown(response.data ?? []) : "";
+    } catch {
+        return "";
+    }
+}
+
 /**
  * 取一篇笔记的正文，供标题生成使用。
  *
@@ -209,10 +264,19 @@ export async function fetchNoteContent(id: string, behavior: BehaviorSettings): 
     const cleaned = normalizeWhitespace(replaceMedia(raw, behavior.mediaMode));
     // 空笔记只看正文本身：文档标题不算内容，否则一篇只有标题的空文档
     // 会被当成「有内容」发去请求，模型只能把现有标题换个说法再还回来。
+    // 目录同理不算内容，它只描述结构。
     const empty = !hasSubstance(cleaned);
     const title = behavior.includeTitle ? await readTitle(id) : "";
     // 标题拼在正文最前面，因此同样受长度上限约束，<body> 永远不会超出额度
     const titled = title === "" ? cleaned : `# ${title}\n\n${cleaned}`;
     const body = truncate(titled, behavior.truncateMode, behavior.contentLimit, behavior.truncateHeadRatio);
-    return {id, title, body, truncated: body.length < titled.length, empty};
+    const truncated = body.length < titled.length;
+
+    // 目录不截取：只传一半的层级结构比不传更容易误导模型
+    const wantsToc = behavior.tocMode === TOC_ALWAYS || (behavior.tocMode === TOC_TRUNCATED && truncated);
+    const outline = wantsToc ? await readOutline(id) : "";
+    // 目录里的标题跟随同一个开关，与正文保持一致
+    const toc = outline === "" || title === "" ? outline : `# ${title}\n${outline}`;
+
+    return {id, title, body, toc, truncated, empty};
 }

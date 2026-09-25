@@ -77,6 +77,14 @@ export const TRUNCATE_OPTIONS = [TRUNCATE_HEAD, TRUNCATE_TAIL, TRUNCATE_BOTH, TR
 /** 正文超出长度上限时的截取方式。 */
 export type TruncateMode = (typeof TRUNCATE_OPTIONS)[number];
 
+export const TOC_NEVER = "never";
+export const TOC_TRUNCATED = "truncated";
+export const TOC_ALWAYS = "always";
+export const TOC_OPTIONS = [TOC_NEVER, TOC_TRUNCATED, TOC_ALWAYS] as const;
+
+/** 什么时候把笔记目录一并传给模型。 */
+export type TocMode = (typeof TOC_OPTIONS)[number];
+
 export interface ApiSettings {
     /** 协议。当前仅实现 "openai"（Chat Completions），预留扩展 Responses API。 */
     protocol: string;
@@ -111,6 +119,8 @@ export interface BehaviorSettings {
     mediaMode: MediaMode;
     /** 是否把文档当前标题一并传入（正文与目录各加一行 H1）。 */
     includeTitle: boolean;
+    /** 什么时候把笔记目录一并传入。目录不受长度上限约束。 */
+    tocMode: TocMode;
     /** 单次请求最多传入几篇笔记。 */
     batchSize: number;
     /** 同时在飞的请求数上限。 */
@@ -188,6 +198,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
         truncateHeadRatio: 0.5,
         mediaMode: MEDIA_PLACEHOLDER,
         includeTitle: true,
+        tocMode: TOC_TRUNCATED,
         batchSize: 3,
         concurrency: 3,
         autoApply: AUTO_APPLY_NEVER,
