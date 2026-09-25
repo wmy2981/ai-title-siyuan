@@ -594,6 +594,32 @@ function buildApiGroup(root: HTMLElement, t: T, settings: PluginSettings): Sync 
     return () => syncs.forEach((sync) => sync());
 }
 
+/** 插件实现了哪些协议：目前只有 Chat Completions。 */
+const SUPPORTED_PROTOCOLS = new Set(["openai"]);
+
+/**
+ * 供应商实际使用的协议。
+ * 思源自己的默认值是 "openai"（aiProviderUi.ts 的 `draft.protocol ||= "openai"`），
+ * 字段缺失时按同一个默认值处理，否则会把没配过的供应商判成「协议不支持」。
+ */
+function providerProtocol(provider: SiyuanProvider): string {
+    return (provider.protocol ?? "").trim() || "openai";
+}
+
+/** 协议标识 -> 展示名。认不出来的原样显示，至少让用户看到思源里存的是什么。 */
+function protocolName(protocol: string, t: T): string {
+    switch (protocol) {
+        case "openai":
+            return t("protocolChatCompletions");
+        case "openai-responses":
+            return t("protocolResponses");
+        case "anthropic-messages":
+            return t("protocolAnthropicMessages");
+        default:
+            return protocol;
+    }
+}
+
 /** 从思源自身的 AI 供应商配置里一次性复制 Base URL / API Key / 模型。 */
 function openImportDialog(t: T, settings: PluginSettings, onImported: () => void): void {
     const providers = readSiyuanProviders().filter((provider) =>
@@ -615,6 +641,9 @@ function openImportDialog(t: T, settings: PluginSettings, onImported: () => void
     }
 
     for (const provider of providers) {
+        const protocol = providerProtocol(provider);
+        const supported = SUPPORTED_PROTOCOLS.has(protocol);
+
         const item = document.createElement("div");
         item.className = "ai-title__import-item";
 
@@ -624,18 +653,27 @@ function openImportDialog(t: T, settings: PluginSettings, onImported: () => void
 
         const meta = document.createElement("div");
         meta.className = "ai-title__import-meta";
-        meta.textContent = `${provider.baseURL} · ${activeModelName(provider) || "-"}`;
+        // 协议类型必须显示出来：同一个供应商的 Anthropic 与 OpenAI 兼容端点
+        // 是两个不同的 Base URL，光看地址分不出哪个是哪个
+        meta.textContent = `${provider.baseURL} · ${activeModelName(provider) || "-"} · ${protocolName(protocol, t)}`;
 
         const choose = document.createElement("button");
         choose.className = "b3-button b3-button--outline";
         // 与打开本对话框的那个按钮区分开：这里点下去是把这一条配置导进来
-        choose.textContent = t("importApply");
+        choose.textContent = supported ? t("importApply") : t("importUnsupported");
+        choose.disabled = !supported;
+        if (!supported) {
+            // 禁用按钮点不出提示，把原因挂在 title 与 aria-label 上
+            choose.title = t("importUnsupportedHint", {protocol: protocolName(protocol, t)});
+            choose.setAttribute("aria-label", choose.title);
+        }
         choose.addEventListener("click", () => {
             settings.api.baseURL = provider.baseURL ?? "";
             settings.api.apiKey = provider.apiKey ?? "";
             // 只取一个模型作为起点，用户仍可在设置页改或重新拉取列表
             settings.api.model = activeModelName(provider);
-            settings.api.protocol = "openai";
+            // 协议跟着思源里的设置走，不写死：支持列表变了这里不用改
+            settings.api.protocol = protocol;
             dialog.destroy();
             onImported();
         });

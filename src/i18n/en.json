@@ -7,6 +7,8 @@
 
   "protocol": "Protocol",
   "protocolChatCompletions": "Chat Completions API",
+  "protocolResponses": "Responses API",
+  "protocolAnthropicMessages": "Anthropic Messages API",
   "protocolDesc": "Only this protocol is implemented for now",
 
   "baseUrl": "Base URL",
@@ -27,6 +29,8 @@
   "importFromSiyuanDesc": "Copy the base URL, API key and model from a provider already configured in SiYuan. The plugin keeps its own copy afterwards",
   "importDialogTitle": "Import provider configuration",
   "importApply": "Import",
+  "importUnsupported": "Unsupported protocol",
+  "importUnsupportedHint": "This provider speaks {protocol}. The plugin only implements Chat Completions, so the request format would not match",
   "importEmpty": "No AI provider with an API key is configured in SiYuan settings.",
 
   "reasoningEffort": "Thinking effort",
