@@ -58,20 +58,30 @@ Open **Settings → Marketplace → Downloaded → AI Title → Settings**.
 | Group | Setting | Default | Notes |
 | --- | --- | --- | --- |
 | API | Protocol | Chat Completions API | Only this protocol is implemented. |
+| API | Thinking effort | Default | Sent as `reasoning_effort`. **Default** sends nothing and leaves it to the provider; **Disabled** asks the model not to reason. Strict endpoints reject the parameter with a 400. |
 | API | Temperature | `1.0` | `0`–`2`. Lower is more deterministic. |
 | API | Top P | `0.8` | Leave empty to omit from the request. |
 | API | Top K | *empty* | Omitted when empty. The official OpenAI API rejects unknown body parameters with a 400, so only fill this in for providers that accept it. |
 | API | Max output tokens | `512` | Sent as `max_completion_tokens`, falling back to `max_tokens` if the provider rejects that name. |
 | Behaviour | Timeout | `10000` ms | Per request. Batches are concurrent, so this is not a shared budget. |
 | Behaviour | Retries | `1` | Only for rate limits, server errors, timeouts and network failures. |
-| Behaviour | Note content limit | `1000` characters | Each note is truncated on its own, keeping the beginning. |
+| Behaviour | Note body limit | `1000` characters | Counts the body only: the note id and its outline are never cut. |
+| Behaviour | Over-long notes | Keep the beginning | Keep the beginning, the end, both ends (split by the share below), or always send the whole body. |
+| Behaviour | Beginning share | `0.5` | Shown for **Keep both ends** only: the fraction of the budget the beginning gets. |
+| Behaviour | Links, images and media | Short placeholder | Replace them with tokens such as `[image]` and `[file(.pdf)]`, drop them, or keep them as they are. |
+| Behaviour | Include the current title | On | Sends the title the note already has together with the body and the outline. |
+| Behaviour | Send the note outline | Only when the body is truncated | Never, when the body was cut short, or always. The outline itself is never truncated. |
 | Behaviour | Notes per request | `3` | Selecting more splits the work into batches. |
 | Behaviour | Max concurrent requests | `3` | Lower it if your provider rate limits. |
 | Behaviour | Apply titles automatically | Disabled | See below. |
+| Behaviour | Title language | Follows the SiYuan interface language | Filled into `{{language}}`. |
+| Behaviour | Title style | `简洁准确，拒绝套话` | Filled into `{{style}}`. |
+| Behaviour | Extra system instructions | *empty* | Appended to the fixed system prompt through `{{system}}`. |
+| Behaviour | Extra user instructions | *empty* | Appended to the fixed user prompt through `{{user}}`. |
 | Interface | Toolbar button | On | |
 | Interface | Breadcrumb button | Off | |
 | Interface | Document tree menu | On | |
-| Interface | Debug mode | Off | Logs the full conversation JSON to the console. |
+| Interface | Debug mode | Off | Logs the complete request and response bodies, and every pipeline decision. |
 
 ### Applying titles
 
@@ -83,18 +93,18 @@ Open **Settings → Marketplace → Downloaded → AI Title → Settings**.
 
 Bulk-renaming documents is destructive and SiYuan's rename has no undo stack. **A failed batch still opens the dialog first**: some notes came back without a title, and that is worth seeing before applying the rest.
 
-### Disabling reasoning
+### Thinking effort
 
-Reasoning models can be slow, and some leave `content` empty while putting everything in a reasoning field. The **Disable thinking** switch adds `reasoning_effort: "none"` to the request body.
+The **Thinking effort** setting is sent as `reasoning_effort`. **Default** sends nothing and lets the provider decide, **Disabled** asks for no reasoning at all, and `low` through `max` ask for progressively more.
 
-That field is the one written into the protocol rather than invented by a vendor: `reasoning_effort` is an OpenAI Chat Completions parameter, and DeepSeek, Ollama, Gemini 2.5, GLM, qwen3.8-max and OpenRouter all read `none` as "do not reason".
+That field is part of the protocol rather than invented by a vendor: `reasoning_effort` is an OpenAI Chat Completions parameter, and DeepSeek, Ollama, Gemini 2.5, GLM, qwen3.8-max and OpenRouter all read `none` as "do not reason". The level names follow the spelling SiYuan's own AI settings use.
 
 It is not universal, and two cases cannot be turned off at all:
 
 - Models that always reason have no off setting (Gemini 2.5 Pro, Gemini 3, thinking-only Qwen models).
 - Strict endpoints reject unknown parameters with a 400 — OpenAI's own API does, and GPT-6 Astra refuses even `none`.
 
-You are told in both cases. When the switch is on and the model reasoned anyway — the response carried `reasoning_content`, or `usage` reported reasoning tokens — the run ends with a "disable thinking had no effect" notice.
+You are told when it did not work. When the effort is **Disabled** and the model reasoned anyway — the response carried `reasoning_content`, or `usage` reported reasoning tokens — the run ends with a "disable thinking had no effect" notice.
 
 That notice matters because this failure is otherwise **silent**: the request succeeds, and you keep paying tokens and latency for a reasoning trace you never asked for.
 
@@ -124,8 +134,8 @@ Enable **Debug mode** in the settings and open the console. It prints the full r
 | `HTTP 404` | Wrong base URL. Check the version segment against your provider's documentation. |
 | `HTTP 401` | Wrong or missing API key. |
 | `max_completion_tokens` in an error | Your provider only accepts `max_tokens`. The plugin retries with the right name automatically; seeing this twice means the retry also failed. |
-| `HTTP 400` mentioning an unknown parameter | Your provider rejects `reasoning_effort`. Turn off **Disable thinking**. |
-| The model returns nothing | Reasoning may have consumed the whole output budget. Raise **Max output tokens** or disable thinking. |
+| `HTTP 400` mentioning an unknown parameter | Your provider rejects `reasoning_effort`. Set **Thinking effort** to **Default**. |
+| The model returns nothing | Reasoning may have consumed the whole output budget. Raise **Max output tokens** or set **Thinking effort** to **Disabled**. |
 | Titles not in the language you want | Change **Title language**. It defaults to your SiYuan interface language. |
 
 ## Development
