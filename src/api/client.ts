@@ -44,8 +44,11 @@ function parseRetryAfter(value: string | undefined): number | undefined {
  *
  * OpenAI 兼容端点与 Anthropic 都把可读信息放在 error.message 里，
  * 网关则常直接返回纯文本或 HTML，所以最后还有一层原文兜底。
+ * 响应体为空时返回空串：状态码由 describeHttpError 统一拼上，
+ * 在这里回填一遍只会拼出「HTTP 404: HTTP 404」这种什么都没多说的报错
+ * （网关对不存在的路径常常就是空响应体加 404）。
  */
-function extractErrorMessage(status: number, body: string): string {
+function extractErrorMessage(body: string): string {
     try {
         const parsed = JSON.parse(body) as {
             error?: {message?: string};
@@ -59,8 +62,12 @@ function extractErrorMessage(status: number, body: string): string {
     } catch {
         // 网关返回 HTML 或纯文本时走下面的兜底
     }
-    const text = body.trim().slice(0, 300);
-    return text === "" ? `HTTP ${status}` : text;
+    return body.trim().slice(0, 300);
+}
+
+/** HTTP 错误的一句话描述：有原文就附上，没有就只留状态码。 */
+function describeHttpError(status: number, detail: string): string {
+    return detail === "" ? `HTTP ${status}` : `HTTP ${status}: ${detail}`;
 }
 
 interface ProxyData {
@@ -172,13 +179,13 @@ export async function chat(
 
         if (response.status >= 400) {
             const retryAfter = parseRetryAfter(headerValue(response.headers, "retry-after"));
-            const message = extractErrorMessage(response.status, response.body);
-            const error = new ApiError(`HTTP ${response.status}: ${message}`, false, retryAfter);
+            const detail = extractErrorMessage(response.body);
+            const error = new ApiError(describeHttpError(response.status, detail), false, retryAfter);
             // 408/409/429/5xx 可重试，其余 4xx 是配置或请求本身的问题，重发无意义
             const retryable = response.status === 408 || response.status === 409 ||
                 response.status === 429 || response.status >= 500;
 
-            if (useMaxCompletionTokens && response.status === 400 && needsMaxTokensFallback(message)) {
+            if (useMaxCompletionTokens && response.status === 400 && needsMaxTokensFallback(detail)) {
                 // 不消耗重试预算：这是供应商字段名差异，不是一次失败尝试
                 debug("Provider rejected max_completion_tokens, retrying with max_tokens");
                 useMaxCompletionTokens = false;
@@ -217,7 +224,7 @@ export async function listModels(api: ApiSettings, timeout: number): Promise<str
     const request = buildProxyRequest(adapter.headers(api), timeout, {url, method: "GET"});
     const response = parseProxyData(await fetchSyncPost(PROXY_URL, request), url);
     if (response.status >= 400) {
-        throw new Error(`HTTP ${response.status}: ${extractErrorMessage(response.status, response.body)}`);
+        throw new Error(describeHttpError(response.status, extractErrorMessage(response.body)));
     }
 
     let parsed: {data?: {id?: string}[]};

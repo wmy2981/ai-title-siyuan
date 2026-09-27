@@ -6,7 +6,7 @@ import {
     type ApiSettings,
     type BehaviorSettings,
 } from "../src/config";
-import {ApiError, chat, EMPTY_CONTENT, testConnection} from "../src/api/client";
+import {ApiError, chat, EMPTY_CONTENT, listModels, testConnection} from "../src/api/client";
 import {setFetchSyncPost} from "./stubs/siyuan";
 
 /** 一次 forwardProxy 调用里插件真正发出去的东西。 */
@@ -125,10 +125,40 @@ describe("chat 的请求与响应（#8 #20 的三种协议都走同一条传输�
         expect((failure as Error).message).toContain("bad gateway");
     });
 
+    it("响应体为空时只报一次状态码（网关对不存在的路径常这么回）", async () => {
+        stubReplies(reply(404, ""));
+        const failure = await chat(PARAMS, API, NO_RETRY).catch((error: unknown) => error);
+        expect((failure as Error).message).toBe("HTTP 404");
+    });
+
     it("测试连接按当前协议发一次请求并回报耗时", async () => {
         stubReplies(reply(200, '{"choices":[{"message":{"content":"hi"}}]}'));
         const result = await testConnection(API, NO_RETRY);
         expect(result.reply).toBe("hi");
         expect(result.elapsed).toBeGreaterThanOrEqual(0);
+    });
+});
+
+describe("listModels（#9 获取模型列表）", () => {
+    it("取 data 里的 id，跳过没有 id 的条目", async () => {
+        stubReplies(reply(200, '{"data":[{"id":"m1"},{"id":""},{"name":"没有 id"},{"id":"m2"}]}'));
+        await expect(listModels(API, 1000)).resolves.toEqual(["m1", "m2"]);
+        expect(calls[0].url).toBe("https://api.openai.com/v1/models");
+        expect(calls[0].method).toBe("GET");
+    });
+
+    it("Messages 协议走同一个端点并带 x-api-key", async () => {
+        stubReplies(reply(200, '{"data":[{"id":"claude-sonnet-5"}]}'));
+        const target: ApiSettings = {...API, protocol: PROTOCOL_ANTHROPIC_MESSAGES, baseURL: "https://api.anthropic.com/v1"};
+        await expect(listModels(target, 1000)).resolves.toEqual(["claude-sonnet-5"]);
+        expect(calls[0].url).toBe("https://api.anthropic.com/v1/models?limit=1000");
+        expect(calls[0].headers).toContainEqual({"x-api-key": "sk-test"});
+    });
+
+    it("失败时带上状态码与原文，原文为空时只留状态码", async () => {
+        stubReplies(reply(401, ""));
+        await expect(listModels(API, 1000)).rejects.toThrow("HTTP 401");
+        stubReplies(reply(403, '{"error":{"message":"forbidden"}}'));
+        await expect(listModels(API, 1000)).rejects.toThrow("HTTP 403: forbidden");
     });
 });
