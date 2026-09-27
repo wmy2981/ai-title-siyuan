@@ -1,0 +1,49 @@
+name: CI
+
+# 每次推送到 main 与每个 PR 都跑一遍：类型检查、单元测试、打包。
+# 打包也在这里跑，是因为「测试全绿但产物打不出来」照样发不出去；
+# 发布流程本身在 cd.yml，两者互不依赖。
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # 单元测试不碰宿主，装得对不对只能看包本身：
+      # 思源按 plugin.json 找入口，缺一个文件就是装不上
+      - name: Check the package contents
+        run: |
+          set -euo pipefail
+          unzip -Z1 package.zip
+          for entry in plugin.json index.js index.css icon.png i18n/en.json i18n/zh-CN.json; do
+            unzip -Z1 package.zip | grep -qx "$entry" || { echo "::error::package.zip is missing $entry"; exit 1; }
+          done
