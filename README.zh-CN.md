@@ -49,7 +49,7 @@ npm run build
 打开 **设置 → 集市 → 已下载 → AI标题生成 → 设置**。
 
 1. **协议** —— 按供应商实际提供的接口选择：Chat Completions、Responses API 或 Anthropic Messages。从思源导入时会自动选中。
-2. **Base URL** —— 按你所用供应商的文档带上版本段。Messages 协议填到版本段为止（如 `https://api.anthropic.com/v1`），插件自己补 `/messages`。
+2. **Base URL** —— 按你所用供应商的文档带上版本段。Messages 协议填供应商的 Messages 基础地址（Anthropic 是 `https://api.anthropic.com/v1`，DeepSeek 是 `https://api.deepseek.com/anthropic`），插件只在缺失时补 `/v1` 与 `/messages`。
 3. **API Key** —— Chat Completions 与 Responses 通过 `Authorization: Bearer <key>` 发送，Messages 通过 `x-api-key` 发送；接口无需密钥时留空。
 4. **模型名称** —— 可直接输入，点击 **获取模型列表** 从供应商端点选择，或用 **从思源设置获取** 复制你已配置好的供应商。
 5. 点击 **测试连接**。只要有回复就说明配置可用。
@@ -135,7 +135,7 @@ Chat Completions 下这个字段是**协议自带的写法，不是厂商扩展*
 | 现象 | 多半是 |
 | --- | --- |
 | `HTTP 404` | Base URL 写错。对照供应商文档检查版本段。 |
-| Messages 协议下 `HTTP 404` | Base URL 要填到版本段为止——`/messages`（以及 `/models`）由插件自己补。 |
+| Messages 协议下 `HTTP 404` | Base URL 要填供应商的 **Messages** 基础地址：Anthropic 是 `https://api.anthropic.com/v1`，DeepSeek 是 `https://api.deepseek.com/anthropic`。插件只在缺失时补 `/v1` 与 `/messages`，所以把 OpenAI 式的 `https://api.deepseek.com` 填进来越过 `/anthropic` 就会落到不存在的 `/v1/messages`。只报 `HTTP 404`、没有响应体，基本就是这种情况。 |
 | `HTTP 401` | API Key 错误或缺失。Messages 认 `x-api-key`，除 OpenRouter 外插件都按这个头发送。 |
 | 报错里出现 `max_completion_tokens`（Chat Completions） | 你的供应商只认 `max_tokens`。插件会自动改用正确字段名重试；若你看到两次，说明重试也失败了。 |
 | `HTTP 400` 且提到未知参数 | 供应商不认 `reasoning_effort`。把 **思考强度** 设为 **默认**。 |

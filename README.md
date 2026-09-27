@@ -49,7 +49,7 @@ That writes `package.zip` in the repository root.
 Open **Settings → Marketplace → Downloaded → AI Title → Settings**.
 
 1. **Protocol** — Chat Completions, the Responses API or Anthropic Messages, whichever your provider serves. Importing from SiYuan picks it for you.
-2. **Base URL** — include the version segment your provider documents. For Messages, stop at the version segment (e.g. `https://api.anthropic.com/v1`); the plugin appends `/messages` itself.
+2. **Base URL** — include the version segment your provider documents. For Messages, use the provider's Messages base (`https://api.anthropic.com/v1`, or `https://api.deepseek.com/anthropic`); the plugin appends `/v1` and `/messages` only when they are missing.
 3. **API Key** — sent as `Authorization: Bearer <key>` on Chat Completions and Responses, as `x-api-key` on Messages. Leave empty if your endpoint needs no key.
 4. **Model** — type a name, click **Fetch models** to pick from the provider's list, or use **Import from SiYuan** to copy a provider you already configured there.
 5. Click **Test connection**. Any reply means the configuration works.
@@ -135,7 +135,7 @@ Enable **Debug mode** in the settings and open the console. It prints the full r
 | Symptom | Likely cause |
 | --- | --- |
 | `HTTP 404` | Wrong base URL. Check the version segment against your provider's documentation. |
-| `HTTP 404` on Messages | The base URL must stop at the version segment — the plugin appends `/messages` (and `/models`) itself. |
+| `HTTP 404` on Messages | The base URL must be the provider's *Messages* base — `https://api.anthropic.com/v1`, or `https://api.deepseek.com/anthropic` for DeepSeek. The plugin appends `/v1` and `/messages` only when they are missing, so an OpenAI-style base such as `https://api.deepseek.com` lands on `/v1/messages`, which does not exist there. `HTTP 404` alone (no body) is exactly this case. |
 | `HTTP 401` | Wrong or missing API key. Messages wants `x-api-key`; the plugin sends it for every host except OpenRouter. |
 | `max_completion_tokens` in an error (Chat Completions) | Your provider only accepts `max_tokens`. The plugin retries with the right name automatically; seeing this twice means the retry also failed. |
 | `HTTP 400` mentioning an unknown parameter | Your provider rejects `reasoning_effort`. Set **Thinking effort** to **Default**. |
