@@ -16,8 +16,8 @@
     "zh-CN": "AI标题生成"
   },
   "description": {
-    "default": "Generate note titles with any OpenAI-compatible chat completions endpoint",
-    "zh-CN": "用任意 OpenAI 兼容的 chat completions 接口为笔记生成标题"
+    "default": "Generate note titles with the Chat Completions, Responses or Anthropic Messages API",
+    "zh-CN": "用 Chat Completions、Responses API 或 Anthropic Messages 接口为笔记生成标题"
   },
   "readme": {
     "default": "README.md",
