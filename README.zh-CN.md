@@ -6,7 +6,7 @@
 
 # AI标题生成
 
-一个替你给笔记起名的思源插件。选中一篇或多篇笔记，插件向任意 OpenAI 兼容的 chat completions 接口请求标题，然后直接写回，或者先交给你确认。
+一个替你给笔记起名的思源插件。选中一篇或多篇笔记，插件按你配置的接口（Chat Completions、Responses API 或 Anthropic Messages）请求标题，然后直接写回，或者先交给你确认。
 
 ## 为什么做这个
 
@@ -19,14 +19,14 @@
 - **批量生成。** 在文档树中选中多篇笔记，一次完成。笔记会自动切分批次，批次之间并发执行。
 - **写回前先确认。** 每个标题都可编辑：取消不想要的，改动任意一条，或单独重新生成一行。
 - **风格自己定，契约不放手。** 系统提示词和用户提示词固定不可改——它们承载插件解析返回值所依赖的 JSON 契约。额外要求写进 `{{system}}`、`{{user}}` 追加位；`{{content}}`、`{{language}}`、`{{style}}` 每次请求时填充。
-- **兼容任意接口。** 可对接任何 OpenAI 兼容的 chat completions 服务，也可直接导入思源里已配置好的供应商。
-- **可调思考强度。** 从「禁用」一直到最高档发送 `reasoning_effort`，也可以完全不发送、交由供应商决定。
+- **三种协议。** Chat Completions、Responses API 与 Anthropic Messages。可对接任意兼容服务，也可直接导入思源里已配置好的供应商——协议跟着一起导入。
+- **可调思考强度。** 从「禁用」一直到最高档，按协议换算成 `reasoning_effort`、`reasoning.effort` 或 Anthropic 的 `thinking`，也可以完全不发送、交由供应商决定。
 - **为排查而生。** 调试模式会把完整请求与响应打进 console。
 
 ## 环境要求
 
 - 思源 3.8.3 或更高版本。
-- 一个 OpenAI 兼容的 chat completions 接口，及其 Base URL 与 API Key。
+- 一个支持 Chat Completions、Responses API 或 Anthropic Messages 的接口，及其 Base URL 与 API Key。
 
 ## 安装
 
@@ -48,21 +48,22 @@ npm run build
 
 打开 **设置 → 集市 → 已下载 → AI标题生成 → 设置**。
 
-1. **Base URL** —— 按你所用供应商的文档带上版本段
-2. **API Key** —— 通过 `Authorization: Bearer <key>` 发送；接口无需密钥时留空。
-3. **模型名称** —— 可直接输入，点击 **获取模型列表** 从供应商端点选择，或用 **从思源设置获取** 复制你已配置好的供应商。
-4. 点击 **测试连接**。只要有回复就说明配置可用。
+1. **协议** —— 按供应商实际提供的接口选择：Chat Completions、Responses API 或 Anthropic Messages。从思源导入时会自动选中。
+2. **Base URL** —— 按你所用供应商的文档带上版本段。Messages 协议填到版本段为止（如 `https://api.anthropic.com/v1`），插件自己补 `/messages`。
+3. **API Key** —— Chat Completions 与 Responses 通过 `Authorization: Bearer <key>` 发送，Messages 通过 `x-api-key` 发送；接口无需密钥时留空。
+4. **模型名称** —— 可直接输入，点击 **获取模型列表** 从供应商端点选择，或用 **从思源设置获取** 复制你已配置好的供应商。
+5. 点击 **测试连接**。只要有回复就说明配置可用。
 
 ### 设置项说明
 
 | 分组 | 设置项 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| 接口 | 协议 | Chat Completions API | 当前仅实现该协议。 |
-| 接口 | 思考强度 | 默认 | 以 `reasoning_effort` 发送。**默认**不发送该字段、交给供应商决定；**禁用**明确要求模型不推理。严格的接口会直接返回 400 拒绝这个参数。 |
-| 接口 | 温度 | `1.0` | 取值 `0`–`2`，越低越稳定。 |
-| 接口 | Top P | `0.8` | 留空则不发送该参数。 |
-| 接口 | Top K | *空* | 留空则不发送。OpenAI 官方接口对未识别参数直接返回 400，仅在确认供应商支持时才填写。 |
-| 接口 | 最大输出 token | `512` | 以 `max_completion_tokens` 发送；若供应商不认这个字段名，回退为 `max_tokens`。 |
+| 接口 | 协议 | Chat Completions API | Chat Completions、Responses API 或 Anthropic Messages。从思源导入供应商时会跟着它的协议走。 |
+| 接口 | 思考强度 | 默认 | Chat Completions 以 `reasoning_effort` 发送，Responses 以 `reasoning.effort` 发送，Messages 换算成 `thinking`。**默认**不发送该字段、交给供应商决定；**禁用**明确要求模型不推理。严格的接口会直接返回 400 拒绝这个参数。 |
+| 接口 | 温度 | `1.0` | 取值 `0`–`2`，越低越稳定。Messages 只接受 `0`–`1`，且开启思考时不发送。 |
+| 接口 | Top P | `0.8` | 留空则不发送该参数。Messages 开启思考时不发送。 |
+| 接口 | Top K | *空* | 留空则不发送。OpenAI 官方接口对未识别参数直接返回 400，Responses 协议没有这个字段，仅在确认供应商支持时才填写；Messages 接受整数。 |
+| 接口 | 最大输出 token | `512` | 以 `max_completion_tokens` 发送；若供应商不认这个字段名，回退为 `max_tokens`。Responses 以 `max_output_tokens` 发送；Messages 以 `max_tokens` 发送，思考预算也从这里扣。 |
 | 行为 | 超时 | `10000` ms | 针对单次请求。批次是并发的，所以这不是共享预算。 |
 | 行为 | 超时重试 | `1` | 仅在限流、服务端错误、超时和网络故障时重试。 |
 | 行为 | 传入单篇笔记正文长度 | `1000` 字符 | 只计正文：笔记 id 与目录不计入，也不会被截断。 |
@@ -95,9 +96,11 @@ npm run build
 
 ### 思考强度
 
-**思考强度** 会作为 `reasoning_effort` 发送。**默认**不发送该字段、由供应商决定；**禁用**明确要求不推理；`low` 到 `max` 依次要求更多推理。
+**思考强度** 在各协议里去的地方不同：Chat Completions 是 `reasoning_effort`，Responses 是 `reasoning.effort`，Anthropic Messages 则换算成 `thinking`。**默认**不发送该字段、由供应商决定；**禁用**明确要求不推理；`low` 到 `max` 依次要求更多推理。
 
-用这个字段是因为它是**协议自带的写法，不是厂商扩展**：`reasoning_effort` 是 OpenAI 官方 Chat Completions 的参数，DeepSeek、Ollama、Gemini 2.5 系、GLM、qwen3.8-max、OpenRouter 都把它解释为「不推理」。档位名称沿用思源自己 AI 设置里的写法。
+Messages 协议下这些档位落在 Anthropic 自己的思考控制上：Claude 4.6 及更早的型号发 `thinking: {type: "enabled", budget_tokens: N}`，预算最多取输出上限的一半；更新的型号发 `thinking: {type: "adaptive"}` 加 `output_config.effort`——两代型号互不认识对方的写法。接口能接受的最小预算是 1024 token，且从 **最大输出 token** 里扣，所以选了档位就要把上限设在 2048 以上；低于这个值时插件会直接说明原因，而不是发一个必然被拒绝的请求。思考与采样参数互斥，因此开启思考时 **温度**、**Top P**、**Top K** 都不发送；新代号型号即便不开启思考也拒绝这三个参数。
+
+Chat Completions 下这个字段是**协议自带的写法，不是厂商扩展**：`reasoning_effort` 是 OpenAI 官方 Chat Completions 的参数，DeepSeek、Ollama、Gemini 2.5 系、GLM、qwen3.8-max、OpenRouter 都把它解释为「不推理」。档位名称沿用思源自己 AI 设置里的写法。
 
 它不是万能钥匙，两种情况关不掉：
 
@@ -132,9 +135,11 @@ npm run build
 | 现象 | 多半是 |
 | --- | --- |
 | `HTTP 404` | Base URL 写错。对照供应商文档检查版本段。 |
-| `HTTP 401` | API Key 错误或缺失。 |
-| 报错里出现 `max_completion_tokens` | 你的供应商只认 `max_tokens`。插件会自动改用正确字段名重试；若你看到两次，说明重试也失败了。 |
+| Messages 协议下 `HTTP 404` | Base URL 要填到版本段为止——`/messages`（以及 `/models`）由插件自己补。 |
+| `HTTP 401` | API Key 错误或缺失。Messages 认 `x-api-key`，除 OpenRouter 外插件都按这个头发送。 |
+| 报错里出现 `max_completion_tokens`（Chat Completions） | 你的供应商只认 `max_tokens`。插件会自动改用正确字段名重试；若你看到两次，说明重试也失败了。 |
 | `HTTP 400` 且提到未知参数 | 供应商不认 `reasoning_effort`。把 **思考强度** 设为 **默认**。 |
+| `Anthropic thinking needs an output token limit of at least 2048` | 选了思考档位而 **最大输出 token** 太小。调大它，或把 **思考强度** 设为 **默认**。 |
 | 模型没有返回任何内容 | 推理可能耗尽了输出预算。调大 **最大输出 token**，或把 **思考强度** 设为 **禁用**。 |
 | 标题不是我想要的语言 | 修改 **标题语言**，它默认跟随你的思源界面语言。 |
 
@@ -143,12 +148,15 @@ npm run build
 ```bash
 npm run dev        # 改动时重新构建
 npm run build      # 生产构建 + package.zip
+npm run test       # 单元测试（vitest）
 npm run typecheck  # tsc --noEmit
 npm run icon       # 重新生成 assets/icon.png 和 assets/preview.png
 npm run preview    # 仅按 assets/preview.html 重拍 assets/preview.png
 ```
 
 `npm run icon` 和 `npm run preview` 用 Playwright 拍摄预览图，首次使用前先执行 `npm install`，再执行 `npx playwright install chromium`。其余脚本都不依赖它。
+
+单元测试覆盖的是能在思源之外跑起来的部分：协议请求体与响应解析、正文截取、提示词渲染、配置合并与文案表。需要内核的路径——导出正文、重命名文档、设置面板——仍然靠在思源里实际加载插件来验证。`.github/workflows/ci.yml` 会在每次推送和 PR 上跑类型检查、测试与打包。
 
 ## 许可
 
