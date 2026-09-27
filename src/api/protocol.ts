@@ -9,9 +9,11 @@
  * 二是被静默忽略的字段会让用户以为设置生效了（旧版的「思考开关」就是这么失效的）。
  */
 import {
+    PROTOCOL_ANTHROPIC_MESSAGES,
     PROTOCOL_RESPONSES,
     REASONING_DEFAULT,
     REASONING_EFFORT_FIELD,
+    REASONING_EFFORT_OFF,
     THINKING_CUSTOM,
     THINKING_DISABLED,
     type ApiSettings,
@@ -323,6 +325,190 @@ function responsesParse(body: string): ChatResult {
     };
 }
 
+/* --------------------------------- Anthropic Messages --------------------------------- */
+
+const ANTHROPIC_VERSION = "2023-06-01";
+
+/** Messages 必须指定输出上限，用户把它留空时用这个保守值（与思源取的一致）。 */
+const ANTHROPIC_DEFAULT_MAX_TOKENS = 4096;
+
+/** 思考预算的下限，接口硬性要求。 */
+const ANTHROPIC_MIN_THINKING_BUDGET = 1024;
+
+/**
+ * 仍然使用「手动思考预算」的 Claude 型号。
+ *
+ * Anthropic 的思考配置换过两次，两套互不认识：4.6 之前是
+ * thinking:{type:"enabled",budget_tokens}，4.7 起改成 thinking:{type:"adaptive"}
+ * 加 output_config.effort —— 旧型号遇到 adaptive 报 400，新型号遇到 enabled 也报 400。
+ * 名单照搬思源自己维护的那份（kernel/util/anthropic.go 的 anthropicLegacyThinking）。
+ */
+const ANTHROPIC_MANUAL_THINKING_MODELS = [
+    "claude-3-7",
+    "claude-sonnet-4-5",
+    "claude-opus-4-5",
+    "claude-haiku-4-5",
+    "claude-opus-4-1",
+    "claude-sonnet-4-202",
+    "claude-opus-4-202",
+];
+
+function anthropicManualThinking(model: string): boolean {
+    const lower = model.toLowerCase();
+    return ANTHROPIC_MANUAL_THINKING_MODELS.some((prefix) => lower.includes(prefix)) ||
+        lower === "claude-sonnet-4" || lower === "claude-opus-4";
+}
+
+/**
+ * 该型号是否还接受 temperature / top_p / top_k。
+ *
+ * 4.7 起这些参数要么被忽略，要么直接让请求 400（Sonnet 5 就明确拒绝），
+ * 所以只对旧型号与第三方 Messages 兼容端点发送。判定取自思源
+ * （kernel/util/anthropic.go 的 anthropicFixedSampling 的反面），认不出来的
+ * 新名字一律按「不接受」处理 —— 少发一个参数只会让标题更稳定。
+ */
+function anthropicAcceptsSampling(model: string): boolean {
+    const lower = model.toLowerCase();
+    if (!lower.includes("claude-")) {
+        return true;
+    }
+    return lower.includes("claude-3") || lower.includes("-4-6") || anthropicManualThinking(lower);
+}
+
+/** 思考强度 → 手动预算。最低一档就是接口下限，最高一档与思源取同一个值。 */
+const ANTHROPIC_THINKING_BUDGETS: Record<string, number> = {
+    low: 1024,
+    medium: 4096,
+    high: 8192,
+    xhigh: 16384,
+    max: 32768,
+};
+
+interface AnthropicReasoning {
+    /** thinking 字段。「默认」档不产出，整个字段都不发。 */
+    thinking?: Record<string, unknown>;
+    /** adaptive 模式下控制思考深度的 effort。 */
+    effort?: string;
+    /** 模型是否真的会思考：开启思考与采样参数互斥，一起发会被直接拒绝。 */
+    active: boolean;
+}
+
+function anthropicReasoning(api: ApiSettings, model: string, maxTokens: number): AnthropicReasoning {
+    const effort = api.reasoningEffort;
+    if (effort === REASONING_DEFAULT) {
+        return {active: false};
+    }
+    if (effort === REASONING_EFFORT_OFF) {
+        // 「禁用」是明确要求不推理。新型号可能已经不允许关闭，
+        // 那种情况由接口原样报错，比这里猜一个折中值更好查
+        return {thinking: {type: "disabled"}, active: false};
+    }
+    if (anthropicManualThinking(model)) {
+        // 思考预算算在输出上限里，为可见的那段回答留一半
+        const budget = Math.min(ANTHROPIC_THINKING_BUDGETS[effort], Math.floor(maxTokens / 2));
+        if (budget < ANTHROPIC_MIN_THINKING_BUDGET) {
+            throw new ApiError(
+                `Anthropic thinking needs an output token limit of at least ${ANTHROPIC_MIN_THINKING_BUDGET * 2} ` +
+                `(currently ${maxTokens}). Raise "max output tokens" or pick the default thinking effort.`,
+                false,
+            );
+        }
+        return {thinking: {type: "enabled", budget_tokens: budget}, active: true};
+    }
+    // 4.7 起思考深度由 effort 控制，budget_tokens 已废弃
+    return {thinking: {type: "adaptive"}, effort, active: true};
+}
+
+/**
+ * Messages 的资源地址。
+ *
+ * 与 Anthropic SDK 一致：地址已经带 /v1 时只追加资源名，否则补一个 /v1 ——
+ * 两种写法在供应商文档里都能见到（api.anthropic.com/v1、api.deepseek.com/anthropic）。
+ */
+function anthropicURL(baseURL: string, resource: string): string {
+    const base = trimBase(baseURL);
+    return /\/v1$/i.test(base) ? `${base}/${resource}` : `${base}/v1/${resource}`;
+}
+
+function anthropicHeaders(api: ApiSettings): Record<string, string> {
+    const headers: Record<string, string> = {"anthropic-version": ANTHROPIC_VERSION};
+    const apiKey = api.apiKey.trim();
+    if (apiKey !== "") {
+        // 与思源一致：OpenRouter 的 Messages 入口只认 Authorization，
+        // Anthropic 自家与其余兼容端点都用 x-api-key
+        if (hostOf(api.baseURL) === "openrouter.ai") {
+            headers.Authorization = `Bearer ${apiKey}`;
+        } else {
+            headers["x-api-key"] = apiKey;
+        }
+    }
+    return headers;
+}
+
+function anthropicPayload(params: ChatParams, api: ApiSettings): Record<string, unknown> {
+    const model = api.model.trim();
+    const maxTokens = api.maxTokens > 0 ? api.maxTokens : ANTHROPIC_DEFAULT_MAX_TOKENS;
+    const payload: Record<string, unknown> = {
+        model,
+        // 与其他两个协议不同，这个字段是必填的
+        max_tokens: maxTokens,
+        system: params.system,
+        messages: [{role: "user", content: [{type: "text", text: params.user}]}],
+        stream: false,
+    };
+
+    const reasoning = anthropicReasoning(api, model, maxTokens);
+    if (reasoning.thinking) {
+        payload.thinking = reasoning.thinking;
+    }
+    if (reasoning.effort) {
+        payload.output_config = {effort: reasoning.effort};
+    }
+    // 开启思考时 temperature 只能为 1、top_p 与 top_k 同样受限，所以整组都不发；
+    // 关了思考（或本来就没开）时，再按型号决定发不发
+    if (!reasoning.active && anthropicAcceptsSampling(model)) {
+        // Messages 只接受 0 到 1，而设置页为了 OpenAI 允许填到 2
+        payload.temperature = Math.min(1, Math.max(0, api.temperature));
+        if (api.topP !== null && api.topP !== undefined) {
+            payload.top_p = api.topP;
+        }
+        if (api.topK !== null && api.topK !== undefined) {
+            payload.top_k = Math.round(api.topK);
+        }
+    }
+    return payload;
+}
+
+interface AnthropicResponse {
+    content?: {type?: string; text?: string; thinking?: string}[];
+    usage?: {
+        output_tokens_details?: {thinking_tokens?: number};
+    };
+}
+
+function anthropicParse(body: string): ChatResult {
+    const parsed = parseBody<AnthropicResponse>(body);
+    if (!Array.isArray(parsed.content)) {
+        throw new ApiError("Response contains no content blocks", false);
+    }
+    let text = "";
+    let reasoning = "";
+    for (const block of parsed.content) {
+        if (block.type === "text") {
+            text += block.text ?? "";
+        } else if (block.type === "thinking") {
+            reasoning += block.thinking ?? "";
+        }
+    }
+    // 与 Chat Completions 一致：content 为空时回退到思考块，
+    // 有些型号会把全部输出都留在思考里
+    const traceText = reasoning.trim();
+    return {
+        text: firstText([text, traceText]),
+        reasoning: trace(traceText, positiveNumber(parsed.usage?.output_tokens_details?.thinking_tokens)),
+    };
+}
+
 /* ------------------------------------- 协议分发 ------------------------------------- */
 
 const chatCompletions: ProtocolAdapter = {
@@ -341,10 +527,21 @@ const responses: ProtocolAdapter = {
     parse: responsesParse,
 };
 
+const anthropic: ProtocolAdapter = {
+    completionURL: (baseURL) => anthropicURL(baseURL, "messages"),
+    // 模型清单默认一页 20 条，设置页只要一次列全
+    modelsURL: (baseURL) => `${anthropicURL(baseURL, "models")}?limit=1000`,
+    headers: anthropicHeaders,
+    payload: anthropicPayload,
+    parse: anthropicParse,
+};
+
 export function adapterFor(protocol: Protocol): ProtocolAdapter {
     switch (protocol) {
         case PROTOCOL_RESPONSES:
             return responses;
+        case PROTOCOL_ANTHROPIC_MESSAGES:
+            return anthropic;
         default:
             // mergeSettings 已把未知取值收敛掉了，这里只是让默认分支有意义
             return chatCompletions;

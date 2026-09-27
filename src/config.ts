@@ -115,7 +115,8 @@ export type TocMode = (typeof TOC_OPTIONS)[number];
  */
 export const PROTOCOL_CHAT_COMPLETIONS = "openai";
 export const PROTOCOL_RESPONSES = "openai-responses";
-export const PROTOCOLS = [PROTOCOL_CHAT_COMPLETIONS, PROTOCOL_RESPONSES] as const;
+export const PROTOCOL_ANTHROPIC_MESSAGES = "anthropic-messages";
+export const PROTOCOLS = [PROTOCOL_CHAT_COMPLETIONS, PROTOCOL_RESPONSES, PROTOCOL_ANTHROPIC_MESSAGES] as const;
 
 export type Protocol = (typeof PROTOCOLS)[number];
 

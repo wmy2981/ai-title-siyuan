@@ -12,10 +12,10 @@
   "protocolDesc": "Pick what the provider actually serves. Importing a SiYuan provider follows its protocol",
 
   "baseUrl": "Base URL",
-  "baseUrlDesc": "Include the version segment your provider documents, e.g. https://api.openai.com/v1",
+  "baseUrlDesc": "Include the version segment your provider documents, e.g. https://api.openai.com/v1. For Messages, stop at /v1 — the plugin appends /messages itself",
 
   "apiKey": "API Key",
-  "apiKeyDesc": "Sent as the Authorization: Bearer header. Leave empty if your endpoint needs no key",
+  "apiKeyDesc": "Sent as Authorization: Bearer on Chat Completions and Responses, and as x-api-key on Messages. Leave empty if your endpoint needs no key",
 
   "modelName": "Model",
   "modelNameDesc": "Type a model name, or pick one with Fetch models",
@@ -30,11 +30,11 @@
   "importDialogTitle": "Import provider configuration",
   "importApply": "Import",
   "importUnsupported": "Unsupported protocol",
-  "importUnsupportedHint": "This provider speaks {protocol}. The plugin implements Chat Completions and Responses only, so the request format would not match",
+  "importUnsupportedHint": "This provider speaks {protocol}. The plugin implements Chat Completions, Responses and Anthropic Messages only, so the request format would not match",
   "importEmpty": "No AI provider with an API key is configured in SiYuan settings.",
 
   "reasoningEffort": "Thinking effort",
-  "reasoningEffortDesc": "Sent as reasoning_effort on Chat Completions and as reasoning.effort on Responses. Disabled asks the model not to reason; Default sends nothing and leaves it to the provider. Strict endpoints reject the parameter outright",
+  "reasoningEffortDesc": "Sent as reasoning_effort on Chat Completions, reasoning.effort on Responses, and mapped to thinking on Messages, where the lowest level is the required 1024-token budget — so the output limit must be at least 2048. Disabled asks the model not to reason; Default sends nothing and leaves it to the provider. Strict endpoints reject the parameter outright",
   "reasoningNone": "Disabled",
   "reasoningDefault": "Default",
   "reasoningLow": "Low",
@@ -44,13 +44,13 @@
   "reasoningMax": "Maximum",
 
   "temperature": "Temperature",
-  "temperatureDesc": "0 to 2. Lower values make titles more deterministic",
+  "temperatureDesc": "0 to 2. Lower values make titles more deterministic. Messages accepts 0 to 1 only, and drops the field when thinking is on or the model is a current-generation one",
   "topP": "Top P",
-  "topPDesc": "0 to 1. Leave empty to omit",
+  "topPDesc": "0 to 1. Leave empty to omit. Messages drops it when thinking is on or the model is a current-generation one",
   "topK": "Top K",
-  "topKDesc": "Left empty the field is not sent, which the official OpenAI API requires. The Responses protocol has no such field. Only some providers accept it",
+  "topKDesc": "Left empty the field is not sent, which the official OpenAI API requires. The Responses protocol has no such field, Messages takes an integer. Only some providers accept it",
   "maxTokens": "Max output tokens",
-  "maxTokensDesc": "Upper bound for one response. Chat Completions sends max_completion_tokens, falling back to max_tokens when rejected; Responses sends max_output_tokens",
+  "maxTokensDesc": "Upper bound for one response. Chat Completions sends max_completion_tokens, falling back to max_tokens when rejected; Responses sends max_output_tokens; Messages sends max_tokens, and its thinking budget comes out of it",
 
   "timeout": "Timeout (ms)",
   "timeoutDesc": "Timeout for each API request. Batches run concurrently, so this is not a budget shared by the whole operation",

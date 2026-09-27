@@ -24,6 +24,7 @@ import {
     MEDIA_OPTIONS,
     MEDIA_PLACEHOLDER,
     MEDIA_RAW,
+    PROTOCOL_ANTHROPIC_MESSAGES,
     PROTOCOL_CHAT_COMPLETIONS,
     PROTOCOL_RESPONSES,
     PROTOCOLS,
@@ -616,6 +617,8 @@ function protocolName(protocol: string, t: T): string {
             return t("protocolChatCompletions");
         case PROTOCOL_RESPONSES:
             return t("protocolResponses");
+        case PROTOCOL_ANTHROPIC_MESSAGES:
+            return t("protocolAnthropicMessages");
         default:
             return protocol;
     }
