@@ -49,7 +49,7 @@ export type ReasoningEffort = (typeof REASONING_OPTIONS)[number];
  *   看到一个名叫 extra_body 的陌生字段然后静默忽略。用户以为关了思考，实际没关。
  * - 其余几条各只对一个供应商有效，选错时同样没有任何反馈。
  *
- * 代码保留未删（含 client 的 thinkingFields），但新配置不再写入这些字段，
+ * 代码保留未删（含 api/protocol.ts 的 thinkingFields），但新配置不再写入这些字段，
  * 读到旧配置时由 mergeSettings 折算成 reasoningEffort。
  *
  * 每一项都必须是**完整的 JSON 对象文本**：client 拿到后直接 JSON.parse。
@@ -104,9 +104,29 @@ export const TOC_OPTIONS = [TOC_NEVER, TOC_TRUNCATED, TOC_ALWAYS] as const;
 /** 什么时候把笔记目录一并传给模型。 */
 export type TocMode = (typeof TOC_OPTIONS)[number];
 
+/**
+ * 生成协议，取值与思源自己的 AI 供应商配置一致（app/src/config/tabs/ai/aiProviderUi.ts）。
+ *
+ * 三者的请求地址、请求体结构和响应结构互不兼容，供应商只支持其中某一种，
+ * 所以协议是接口配置里的第一等字段，不是能猜出来的东西 —— 从思源导入时会跟着走。
+ *
+ * 空串与未知取值一律折算成 Chat Completions：思源那边的协议字段缺省时也是这个语义
+ * （aiProviderUi.ts 的 `draft.protocol ||= "openai"`）。
+ */
+export const PROTOCOL_CHAT_COMPLETIONS = "openai";
+export const PROTOCOL_RESPONSES = "openai-responses";
+export const PROTOCOL_ANTHROPIC_MESSAGES = "anthropic-messages";
+export const PROTOCOLS = [PROTOCOL_CHAT_COMPLETIONS, PROTOCOL_RESPONSES, PROTOCOL_ANTHROPIC_MESSAGES] as const;
+
+export type Protocol = (typeof PROTOCOLS)[number];
+
+/** 判断某个取值是否是插件实现了的协议。导入思源配置与读旧配置时都要过一次。 */
+export function isProtocol(value: unknown): value is Protocol {
+    return typeof value === "string" && (PROTOCOLS as readonly string[]).includes(value);
+}
+
 export interface ApiSettings {
-    /** 协议。当前仅实现 "openai"（Chat Completions），预留扩展 Responses API。 */
-    protocol: string;
+    protocol: Protocol;
     baseURL: string;
     apiKey: string;
     model: string;
@@ -207,7 +227,7 @@ Style: {{style}}
 
 export const DEFAULT_SETTINGS: PluginSettings = {
     api: {
-        protocol: "openai",
+        protocol: PROTOCOL_CHAT_COMPLETIONS,
         baseURL: "",
         apiKey: "",
         model: "",
@@ -264,6 +284,11 @@ export function mergeSettings(stored: unknown): PluginSettings {
     // 具体见 THINKING_PRESETS 的注释）。
     api.disableThinking = DEFAULT_SETTINGS.api.disableThinking;
     api.customThinking = "";
+    // 手改过的配置文件、或本插件卸载重装后读到的旧配置里，协议可能是插件没实现的取值。
+    // 与其让请求按错误的格式发出去，不如退回 Chat Completions。
+    if (!isProtocol(api.protocol)) {
+        api.protocol = DEFAULT_SETTINGS.api.protocol;
+    }
     // 旧版的「禁用思考」开关折算成思考强度的「禁用」档：用户想要的是「明确要求不推理」，
     // 而不是「不发送这个字段」，两者在新界面里是不同的档位，不能混为一谈。
     // 只在没存过 reasoningEffort 时推导一次，之后以新界面上的选择为准；
@@ -291,12 +316,4 @@ export function mergeSettings(stored: unknown): PluginSettings {
 /** 必填项是否齐全，用于在发请求前给出一致的提示。 */
 export function hasProviderConfig(api: ApiSettings): boolean {
     return api.baseURL.trim() !== "" && api.model.trim() !== "";
-}
-
-export function chatCompletionsURL(baseURL: string): string {
-    return `${baseURL.trim().replace(/\/+$/, "")}/chat/completions`;
-}
-
-export function modelsURL(baseURL: string): string {
-    return `${baseURL.trim().replace(/\/+$/, "")}/models`;
 }

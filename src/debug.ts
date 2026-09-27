@@ -72,12 +72,18 @@ export function debugJson(label: string, value: unknown): void {
  * Dump the full conversation sent to the model: the exact request body first,
  * then a decoded view of the messages, which is easier to read than the JSON
  * escaping of a long prompt.
+ *
+ * The messages are passed in rather than read off the payload: each protocol
+ * puts them somewhere else (messages / instructions + input / system).
  */
-export function debugRequest(url: string, payload: Record<string, unknown>): void {
+export function debugRequest(
+    url: string,
+    payload: Record<string, unknown>,
+    messages: {role: string; content: string}[],
+): void {
     if (!enabled) {
         return;
     }
-    const messages = (payload as {messages?: {role: string; content: string}[]}).messages ?? [];
     const lines = [
         `POST ${url}`,
         "  -- request body (verbatim) --",

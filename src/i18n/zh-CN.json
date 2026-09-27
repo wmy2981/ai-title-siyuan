@@ -9,13 +9,13 @@
   "protocolChatCompletions": "Chat Completions API",
   "protocolResponses": "Responses API",
   "protocolAnthropicMessages": "Anthropic Messages API",
-  "protocolDesc": "当前仅实现该协议",
+  "protocolDesc": "按供应商实际提供的接口选择，导入思源配置时会跟着供应商的协议走",
 
   "baseUrl": "Base URL",
-  "baseUrlDesc": "按供应商文档填写并带上版本段，如 https://api.openai.com/v1",
+  "baseUrlDesc": "按供应商文档填写并带上版本段，如 https://api.openai.com/v1。Messages 协议填到 /v1 即可，插件自己补 /messages",
 
   "apiKey": "API Key",
-  "apiKeyDesc": "以 Authorization: Bearer 发送；接口无需密钥时留空",
+  "apiKeyDesc": "Chat Completions 与 Responses 以 Authorization: Bearer 发送，Messages 以 x-api-key 发送；接口无需密钥时留空",
 
   "modelName": "模型名称",
   "modelNameDesc": "可直接输入，或点「获取模型列表」后选择",
@@ -30,11 +30,11 @@
   "importDialogTitle": "导入供应商配置",
   "importApply": "导入",
   "importUnsupported": "协议不支持",
-  "importUnsupportedHint": "该供应商使用 {protocol}，插件仅实现 Chat Completions，请求格式对不上",
+  "importUnsupportedHint": "该供应商使用 {protocol}，插件只实现了 Chat Completions、Responses 与 Anthropic Messages，请求格式对不上",
   "importEmpty": "思源设置里没有已填写 API Key 的 AI 供应商。",
 
   "reasoningEffort": "思考强度",
-  "reasoningEffortDesc": "以 reasoning_effort 发送。「禁用」明确要求模型不推理，「默认」不发送该字段、交由供应商决定。严格的接口会直接拒绝这个参数",
+  "reasoningEffortDesc": "Chat Completions 以 reasoning_effort 发送，Responses 以 reasoning.effort 发送，Messages 换算成 thinking（低档就是接口要求的 1024 预算下限，所以输出上限至少要 2048）。「禁用」明确要求模型不推理，「默认」不发送该字段、交由供应商决定。严格的接口会直接拒绝这个参数",
   "reasoningNone": "禁用",
   "reasoningDefault": "默认",
   "reasoningLow": "低",
@@ -44,13 +44,13 @@
   "reasoningMax": "最大",
 
   "temperature": "温度",
-  "temperatureDesc": "取值 0 到 2，越低标题越稳定",
+  "temperatureDesc": "取值 0 到 2，越低标题越稳定。Messages 只接受 0 到 1，且开启思考或使用新代号模型时不发送",
   "topP": "Top P",
-  "topPDesc": "取值 0 到 1，留空则不发送",
+  "topPDesc": "取值 0 到 1，留空则不发送。Messages 开启思考或使用新代号模型时不发送",
   "topK": "Top K",
-  "topKDesc": "留空则不发送。OpenAI 官方接口必须留空，仅部分供应商支持",
+  "topKDesc": "留空则不发送。OpenAI 官方接口必须留空，Responses 协议没有这个字段，Messages 接受整数，仅部分供应商支持",
   "maxTokens": "最大输出 token",
-  "maxTokensDesc": "单次响应上限。优先以 max_completion_tokens 发送，被拒绝时回退 max_tokens",
+  "maxTokensDesc": "单次响应上限。Chat Completions 优先以 max_completion_tokens 发送、被拒时回退 max_tokens；Responses 以 max_output_tokens 发送；Messages 以 max_tokens 发送，且思考预算也从这里扣",
 
   "timeout": "超时（ms）",
   "timeoutDesc": "单次 API 请求的超时。批次是并发的，所以这不是整个操作共享的预算",

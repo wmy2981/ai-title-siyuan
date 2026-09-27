@@ -6,7 +6,7 @@
 
 # AI Title
 
-A SiYuan plugin that names your notes for you. Select one or more notes, and it asks an OpenAI-compatible chat completions endpoint for a title for each one — then either writes them back or lets you review first.
+A SiYuan plugin that names your notes for you. Select one or more notes, and it asks your provider for a title for each one — over Chat Completions, the Responses API or Anthropic Messages — then either writes them back or lets you review first.
 
 ## Why it exists
 
@@ -19,14 +19,14 @@ This plugin does the naming pass for you. It reads each note's content, asks a m
 - **Generate in bulk.** Select many notes in the document tree and title them in one action. Notes are split into batches and the batches run concurrently.
 - **Review before writing.** Every title stays editable. Untick what you don't want, edit any field, or regenerate a single row.
 - **Your style, not the contract.** The system and user prompts are fixed because they carry the JSON contract the plugin parses. Put your own requirements in the `{{system}}` and `{{user}}` append slots; `{{content}}`, `{{language}}` and `{{style}}` are filled in per request.
-- **Any compatible endpoint.** Point it at any OpenAI-compatible chat completions API, or import a provider you already configured in SiYuan.
-- **Set the thinking effort.** Send `reasoning_effort` at any level from disabled up to maximum, or send nothing and leave it to the provider.
+- **Three protocols.** Chat Completions, the Responses API and Anthropic Messages. Point it at any compatible endpoint, or import a provider you already configured in SiYuan — the protocol comes along with it.
+- **Set the thinking effort.** Pick a level from disabled up to maximum — it travels as `reasoning_effort`, `reasoning.effort` or Anthropic `thinking` depending on the protocol — or send nothing and leave it to the provider.
 - **Built for debugging.** Debug mode dumps the full request and response to the console.
 
 ## Requirements
 
 - SiYuan 3.8.3 or later.
-- An OpenAI-compatible chat completions endpoint, and its base URL and API key.
+- An endpoint speaking Chat Completions, the Responses API or Anthropic Messages, and its base URL and API key.
 
 ## Install
 
@@ -48,21 +48,22 @@ That writes `package.zip` in the repository root.
 
 Open **Settings → Marketplace → Downloaded → AI Title → Settings**.
 
-1. **Base URL** — include the version segment your provider documents.
-2. **API Key** — sent as `Authorization: Bearer <key>`. Leave empty if your endpoint needs no key.
-3. **Model** — type a name, click **Fetch models** to pick from the provider's list, or use **Import from SiYuan** to copy a provider you already configured there.
-4. Click **Test connection**. Any reply means the configuration works.
+1. **Protocol** — Chat Completions, the Responses API or Anthropic Messages, whichever your provider serves. Importing from SiYuan picks it for you.
+2. **Base URL** — include the version segment your provider documents. For Messages, use the provider's Messages base (`https://api.anthropic.com/v1`, or `https://api.deepseek.com/anthropic`); the plugin appends `/v1` and `/messages` only when they are missing.
+3. **API Key** — sent as `Authorization: Bearer <key>` on Chat Completions and Responses, as `x-api-key` on Messages. Leave empty if your endpoint needs no key.
+4. **Model** — type a name, click **Fetch models** to pick from the provider's list, or use **Import from SiYuan** to copy a provider you already configured there.
+5. Click **Test connection**. Any reply means the configuration works.
 
 ### Settings reference
 
 | Group | Setting | Default | Notes |
 | --- | --- | --- | --- |
-| API | Protocol | Chat Completions API | Only this protocol is implemented. |
-| API | Thinking effort | Default | Sent as `reasoning_effort`. **Default** sends nothing and leaves it to the provider; **Disabled** asks the model not to reason. Strict endpoints reject the parameter with a 400. |
-| API | Temperature | `1.0` | `0`–`2`. Lower is more deterministic. |
-| API | Top P | `0.8` | Leave empty to omit from the request. |
-| API | Top K | *empty* | Omitted when empty. The official OpenAI API rejects unknown body parameters with a 400, so only fill this in for providers that accept it. |
-| API | Max output tokens | `512` | Sent as `max_completion_tokens`, falling back to `max_tokens` if the provider rejects that name. |
+| API | Protocol | Chat Completions API | Chat Completions, the Responses API or Anthropic Messages. Importing a provider from SiYuan selects the protocol it uses. |
+| API | Thinking effort | Default | Sent as `reasoning_effort` on Chat Completions, `reasoning.effort` on Responses, and mapped to `thinking` on Messages. **Default** sends nothing and leaves it to the provider; **Disabled** asks the model not to reason. Strict endpoints reject the parameter with a 400. |
+| API | Temperature | `1.0` | `0`–`2`. Lower is more deterministic. Messages accepts `0`–`1` only, and drops the field when thinking is on. |
+| API | Top P | `0.8` | Leave empty to omit from the request. Messages drops it when thinking is on. |
+| API | Top K | *empty* | Omitted when empty. The official OpenAI API rejects unknown body parameters with a 400, and the Responses protocol has no such field, so only fill this in for providers that accept it. Messages takes an integer. |
+| API | Max output tokens | `512` | Sent as `max_completion_tokens`, falling back to `max_tokens` if the provider rejects that name. Responses sends `max_output_tokens`; Messages sends `max_tokens` and its thinking budget comes out of it. |
 | Behaviour | Timeout | `10000` ms | Per request. Batches are concurrent, so this is not a shared budget. |
 | Behaviour | Retries | `1` | Only for rate limits, server errors, timeouts and network failures. |
 | Behaviour | Note body limit | `1000` characters | Counts the body only: the note id and its outline are never cut. |
@@ -95,9 +96,11 @@ Bulk-renaming documents is destructive and SiYuan's rename has no undo stack. **
 
 ### Thinking effort
 
-The **Thinking effort** setting is sent as `reasoning_effort`. **Default** sends nothing and lets the provider decide, **Disabled** asks for no reasoning at all, and `low` through `max` ask for progressively more.
+The **Thinking effort** setting travels differently per protocol: as `reasoning_effort` on Chat Completions, as `reasoning.effort` on Responses, and as `thinking` on Anthropic Messages. **Default** sends nothing and lets the provider decide, **Disabled** asks for no reasoning at all, and `low` through `max` ask for progressively more.
 
-That field is part of the protocol rather than invented by a vendor: `reasoning_effort` is an OpenAI Chat Completions parameter, and DeepSeek, Ollama, Gemini 2.5, GLM, qwen3.8-max and OpenRouter all read `none` as "do not reason". The level names follow the spelling SiYuan's own AI settings use.
+On Messages the levels map onto Anthropic's own thinking controls. Models up to Claude 4.6 get `thinking: {type: "enabled", budget_tokens: N}`, with the budget capped at half the output limit; newer models get `thinking: {type: "adaptive"}` plus `output_config.effort`, because the two generations do not accept each other's spelling. The smallest budget the API takes is 1024 tokens and it comes out of **Max output tokens**, so keep that at 2048 or more when you pick a level — below that the plugin stops with an explanation rather than sending a request the API would reject. Thinking and the sampling parameters are mutually exclusive, so **Temperature**, **Top P** and **Top K** are left out while thinking is on, and the current-generation Claude models reject them even when thinking is off.
+
+On Chat Completions the field is part of the protocol rather than invented by a vendor: `reasoning_effort` is an OpenAI Chat Completions parameter, and DeepSeek, Ollama, Gemini 2.5, GLM, qwen3.8-max and OpenRouter all read `none` as "do not reason". The level names follow the spelling SiYuan's own AI settings use.
 
 It is not universal, and two cases cannot be turned off at all:
 
@@ -132,9 +135,11 @@ Enable **Debug mode** in the settings and open the console. It prints the full r
 | Symptom | Likely cause |
 | --- | --- |
 | `HTTP 404` | Wrong base URL. Check the version segment against your provider's documentation. |
-| `HTTP 401` | Wrong or missing API key. |
-| `max_completion_tokens` in an error | Your provider only accepts `max_tokens`. The plugin retries with the right name automatically; seeing this twice means the retry also failed. |
+| `HTTP 404` on Messages | The base URL must be the provider's *Messages* base — `https://api.anthropic.com/v1`, or `https://api.deepseek.com/anthropic` for DeepSeek. The plugin appends `/v1` and `/messages` only when they are missing, so an OpenAI-style base such as `https://api.deepseek.com` lands on `/v1/messages`, which does not exist there. `HTTP 404` alone (no body) is exactly this case. |
+| `HTTP 401` | Wrong or missing API key. Messages wants `x-api-key`; the plugin sends it for every host except OpenRouter. |
+| `max_completion_tokens` in an error (Chat Completions) | Your provider only accepts `max_tokens`. The plugin retries with the right name automatically; seeing this twice means the retry also failed. |
 | `HTTP 400` mentioning an unknown parameter | Your provider rejects `reasoning_effort`. Set **Thinking effort** to **Default**. |
+| `Anthropic thinking needs an output token limit of at least 2048` | A thinking level is selected while **Max output tokens** is too small. Raise it, or set **Thinking effort** to **Default**. |
 | The model returns nothing | Reasoning may have consumed the whole output budget. Raise **Max output tokens** or set **Thinking effort** to **Disabled**. |
 | Titles not in the language you want | Change **Title language**. It defaults to your SiYuan interface language. |
 
@@ -143,12 +148,15 @@ Enable **Debug mode** in the settings and open the console. It prints the full r
 ```bash
 npm run dev        # rebuild on change
 npm run build      # production build + package.zip
+npm run test       # unit tests (vitest)
 npm run typecheck  # tsc --noEmit
 npm run icon       # regenerate assets/icon.png and assets/preview.png
 npm run preview    # re-shoot assets/preview.png from assets/preview.html
 ```
 
 `npm run icon` and `npm run preview` shoot the preview with Playwright, so run `npm install` followed by `npx playwright install chromium` once before the first preview build. Every other script works without it.
+
+The unit tests cover what runs outside SiYuan: protocol request bodies and response parsing, body truncation, prompt rendering, settings merging and the i18n tables. Everything that needs the kernel — exporting a note, renaming a document, the settings panel — is verified by loading the plugin in SiYuan. `.github/workflows/ci.yml` runs typecheck, tests and the packaging step on every push and pull request.
 
 ## License
 
