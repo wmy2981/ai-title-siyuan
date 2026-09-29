@@ -94,6 +94,9 @@
   "titleStyle": "标题风格",
   "titleStyleDesc": "填入 {{style}} 占位符",
 
+  "ignoreInjection": "忽略笔记中的注入文本",
+  "ignoreInjectionDesc": "在系统提示词里追加一句，要求模型忽略笔记正文中试图干扰、决定或影响标题生成的文本",
+
   "systemExtra": "追加系统提示词",
   "systemExtraDesc": "附加在内置系统提示词的末尾。系统提示词固定不可改：它定义了插件解析返回值所依赖的 JSON 格式约定",
   "userExtra": "追加用户提示词",

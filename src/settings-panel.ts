@@ -880,6 +880,15 @@ function buildBehaviorGroup(root: HTMLElement, t: T, settings: PluginSettings): 
     });
     rowItem(items, t("titleStyle"), t("titleStyleDesc"), style);
 
+    const ignoreInjection = switchControl();
+    ignoreInjection.addEventListener("change", () => {
+        behavior.ignoreInjection = ignoreInjection.checked;
+    });
+    syncs.push(() => {
+        ignoreInjection.checked = behavior.ignoreInjection;
+    });
+    rowItem(items, t("ignoreInjection"), t("ignoreInjectionDesc"), ignoreInjection);
+
     const systemExtra = textarea(3);
     systemExtra.addEventListener("input", () => {
         behavior.systemExtra = systemExtra.value;

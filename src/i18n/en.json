@@ -94,6 +94,9 @@
   "titleStyle": "Title style",
   "titleStyleDesc": "Filled into the {{style}} placeholder",
 
+  "ignoreInjection": "Ignore injected instructions",
+  "ignoreInjectionDesc": "Appends a line to the system prompt telling the model to ignore any text in the notes that tries to interfere with, decide or influence the titles",
+
   "systemExtra": "Extra system instructions",
   "systemExtraDesc": "Appended to the end of the built-in system prompt. That prompt is fixed because it defines the JSON contract the plugin parses",
   "userExtra": "Extra user instructions",
