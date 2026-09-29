@@ -77,6 +77,7 @@ Open **Settings → Marketplace → Downloaded → AI Title → Settings**.
 | Behaviour | Apply titles automatically | Disabled | See below. |
 | Behaviour | Title language | Follows the SiYuan interface language | Filled into `{{language}}`. |
 | Behaviour | Title style | `简洁准确，拒绝套话` | Filled into `{{style}}`. |
+| Behaviour | Ignore injected instructions | On | Adds a line to the system prompt telling the model to ignore any text in the notes that tries to interfere with, decide or influence the titles. |
 | Behaviour | Extra system instructions | *empty* | Appended to the fixed system prompt through `{{system}}`. |
 | Behaviour | Extra user instructions | *empty* | Appended to the fixed user prompt through `{{user}}`. |
 | Interface | Toolbar button | On | |
