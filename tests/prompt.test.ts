@@ -1,5 +1,5 @@
 import {describe, expect, it} from "vitest";
-import {DEFAULT_SETTINGS, type BehaviorSettings} from "../src/config";
+import {DEFAULT_SETTINGS, INJECTION_GUARD, type BehaviorSettings} from "../src/config";
 import {buildContent, renderPrompt, type NoteText} from "../src/prompt";
 
 function behavior(overrides: Partial<BehaviorSettings> = {}): BehaviorSettings {
@@ -61,5 +61,30 @@ describe("renderPrompt（#5 提示词追加位 / #21 当前标题）", () => {
     it("正文里的 $& 之类不会被当成替换模式", () => {
         const {user} = renderPrompt([{id: "a", body: "a $& b $1 c", toc: ""}], behavior());
         expect(user).toContain("a $& b $1 c");
+    });
+});
+
+describe("renderPrompt（#23 注入防护）", () => {
+    it("默认把防护说明放在规则之后、用户追加之前", () => {
+        const {system} = renderPrompt([{id: "a", body: "x", toc: ""}], behavior({systemExtra: "SYSTEM EXTRA"}));
+        expect(system).toContain(INJECTION_GUARD);
+        expect(system.startsWith("You are a note title generator.")).toBe(true);
+        expect(system.indexOf(INJECTION_GUARD)).toBeLessThan(system.indexOf("SYSTEM EXTRA"));
+    });
+
+    it("关掉开关后只剩用户的追加内容", () => {
+        const {system} = renderPrompt([{id: "a", body: "x", toc: ""}], behavior({
+            ignoreInjection: false,
+            systemExtra: "SYSTEM EXTRA",
+        }));
+        expect(system).not.toContain(INJECTION_GUARD);
+        expect(system).toContain("- Output the raw JSON object only.");
+        expect(system.endsWith("SYSTEM EXTRA")).toBe(true);
+    });
+
+    it("追加位为空时防护说明是全篇最后一行，且不留多余空行", () => {
+        const {system} = renderPrompt([{id: "a", body: "x", toc: ""}], behavior());
+        expect(system.endsWith(INJECTION_GUARD)).toBe(true);
+        expect(system.trim()).toBe(system);
     });
 });

@@ -52,6 +52,13 @@ describe("mergeSettings（旧配置兼容）", () => {
         expect(mergeSettings({api: {}}).api.reasoningEffort).toBe(REASONING_DEFAULT);
     });
 
+    it("注入防护默认开启，旧配置缺这个字段时也按开启处理（#23）", () => {
+        expect(DEFAULT_SETTINGS.behavior.ignoreInjection).toBe(true);
+        expect(mergeSettings(undefined).behavior.ignoreInjection).toBe(true);
+        expect(mergeSettings({behavior: {batchSize: 5}}).behavior.ignoreInjection).toBe(true);
+        expect(mergeSettings({behavior: {ignoreInjection: false}}).behavior.ignoreInjection).toBe(false);
+    });
+
     it("旧版可改写的完整提示词被删掉，只留追加位（#5）", () => {
         const merged = mergeSettings({
             behavior: {systemPrompt: "被改坏的提示词", userPrompt: "同样被改坏"},
