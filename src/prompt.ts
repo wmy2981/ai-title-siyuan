@@ -5,10 +5,11 @@
  *   {{content}}  拼装好的笔记列表
  *   {{language}} 行为配置里的「标题语言」
  *   {{style}}    行为配置里的「标题风格」
+ *   {{guard}}    开启注入防护时的说明，为空表示不追加
  *   {{system}}   追加到系统提示词末尾的自定义说明
  *   {{user}}     追加到用户提示词末尾的自定义说明
  */
-import {DEFAULT_SYSTEM_PROMPT, DEFAULT_USER_PROMPT, type BehaviorSettings} from "./config";
+import {DEFAULT_SYSTEM_PROMPT, DEFAULT_USER_PROMPT, INJECTION_GUARD, type BehaviorSettings} from "./config";
 
 export interface NoteText {
     id: string;
@@ -55,6 +56,9 @@ export function renderPrompt(
         content: buildContent(notes),
         language: behavior.titleLanguage,
         style: behavior.titleStyle,
+        // 防护说明自带结尾空行：关掉时用户追加位接在模板原有的空行之后，
+        // 打开时两者之间也正好空一行
+        guard: behavior.ignoreInjection ? `${INJECTION_GUARD}\n\n` : "",
         system: behavior.systemExtra,
         user: behavior.userExtra,
     };
