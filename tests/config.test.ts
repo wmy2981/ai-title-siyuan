@@ -52,6 +52,14 @@ describe("mergeSettings（旧配置兼容）", () => {
         expect(mergeSettings({api: {}}).api.reasoningEffort).toBe(REASONING_DEFAULT);
     });
 
+    it("自定义请求头默认留空，存的不是文本时按空处理（#24）", () => {
+        expect(DEFAULT_SETTINGS.api.customHeaders).toBe("");
+        expect(mergeSettings({api: {baseURL: "https://example.com/v1"}}).api.customHeaders).toBe("");
+        expect(mergeSettings({api: {customHeaders: '{"X-Route": "a"}'}}).api.customHeaders).toBe('{"X-Route": "a"}');
+        // 手改成对象/数组时不留着：留着只会在第一次解析时炸成看不懂的报错
+        expect(mergeSettings({api: {customHeaders: {"X-Route": "a"}}}).api.customHeaders).toBe("");
+    });
+
     it("注入防护默认开启，旧配置缺这个字段时也按开启处理（#23）", () => {
         expect(DEFAULT_SETTINGS.behavior.ignoreInjection).toBe(true);
         expect(mergeSettings(undefined).behavior.ignoreInjection).toBe(true);

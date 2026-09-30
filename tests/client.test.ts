@@ -139,6 +139,28 @@ describe("chat 的请求与响应（#8 #20 的三种协议都走同一条传输�
     });
 });
 
+describe("自定义请求头（#24）", () => {
+    it("随请求发出、覆盖同名的鉴权头，获取模型列表也带上", async () => {
+        stubReplies(reply(200, OK_BODY), reply(200, '{"data":[{"id":"m1"}]}'));
+        const target: ApiSettings = {
+            ...API,
+            customHeaders: '{"Authorization": "Bearer from-header", "X-Route": "a"}',
+        };
+        await chat(PARAMS, target, NO_RETRY);
+        // 只有一项 Authorization：自定义头覆盖插件自己那份，而不是并存
+        expect(calls[0].headers).toEqual([{Authorization: "Bearer from-header"}, {"X-Route": "a"}]);
+        await listModels(target, 1000);
+        expect(calls[1].headers).toContainEqual({"X-Route": "a"});
+    });
+
+    it("请求头写坏时当场报错，不做无意义的重发", async () => {
+        stubReplies(reply(200, OK_BODY));
+        const target: ApiSettings = {...API, customHeaders: '{"X-Route": '};
+        await expect(chat(PARAMS, target, {...NO_RETRY, retries: 3})).rejects.toThrow(/not valid JSON/);
+        expect(calls).toHaveLength(0);
+    });
+});
+
 describe("listModels（#9 获取模型列表）", () => {
     it("取 data 里的 id，跳过没有 id 的条目", async () => {
         stubReplies(reply(200, '{"data":[{"id":"m1"},{"id":""},{"name":"没有 id"},{"id":"m2"}]}'));
