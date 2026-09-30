@@ -21,6 +21,7 @@ This plugin does the naming pass for you. It reads each note's content, asks a m
 - **Your style, not the contract.** The system and user prompts are fixed because they carry the JSON contract the plugin parses. Put your own requirements in the `{{system}}` and `{{user}}` append slots; `{{content}}`, `{{language}}` and `{{style}}` are filled in per request.
 - **Three protocols.** Chat Completions, the Responses API and Anthropic Messages. Point it at any compatible endpoint, or import a provider you already configured in SiYuan — the protocol comes along with it.
 - **Set the thinking effort.** Pick a level from disabled up to maximum — it travels as `reasoning_effort`, `reasoning.effort` or Anthropic `thinking` depending on the protocol — or send nothing and leave it to the provider.
+- **Custom request headers.** Fill in a JSON object of extra headers whose values may reference SiYuan variables (`{{vars.NAME}}`) and secrets (`{{secrets.NAME}}`), resolved before every request — which is what providers such as opencode need. Importing a provider from SiYuan brings its headers along.
 - **Built for debugging.** Debug mode dumps the full request and response to the console.
 
 ## Requirements
@@ -64,6 +65,7 @@ Open **Settings → Marketplace → Downloaded → AI Title → Settings**.
 | API | Top P | `0.8` | Leave empty to omit from the request. Messages drops it when thinking is on. |
 | API | Top K | *empty* | Omitted when empty. The official OpenAI API rejects unknown body parameters with a 400, and the Responses protocol has no such field, so only fill this in for providers that accept it. Messages takes an integer. |
 | API | Max output tokens | `512` | Sent as `max_completion_tokens`, falling back to `max_tokens` if the provider rejects that name. Responses sends `max_output_tokens`; Messages sends `max_tokens` and its thinking budget comes out of it. |
+| API | Custom headers | *empty* | A JSON object of extra request headers. Values may reference SiYuan variables and secrets; see below. |
 | Behaviour | Timeout | `10000` ms | Per request. Batches are concurrent, so this is not a shared budget. |
 | Behaviour | Retries | `1` | Only for rate limits, server errors, timeouts and network failures. |
 | Behaviour | Note body limit | `1000` characters | Counts the body only: the note id and its outline are never cut. |
@@ -84,6 +86,24 @@ Open **Settings → Marketplace → Downloaded → AI Title → Settings**.
 | Interface | Breadcrumb button | Off | |
 | Interface | Document tree menu | On | |
 | Interface | Debug mode | Off | Logs the complete request and response bodies, and every pipeline decision. |
+
+### Custom headers
+
+Some providers insist on headers of their own. opencode, for one, wants a stable conversation id in `x-opencode-session` plus a client-specific `User-Agent`. Fill them in as a JSON object:
+
+```json
+{
+  "x-opencode-session": "{{vars.OPENCODE_GO_SESSION}}",
+  "User-Agent": "my-agent/1.0"
+}
+```
+
+- `{{vars.NAME}}` reads a variable and `{{secrets.NAME}}` a secret from **Settings → Secrets and variables**. Both are resolved **before every request**: the plugin stores only the reference, because another plugin may rewrite the variable per conversation.
+- A secret is subject to its own allowed-hosts list. When the target host is not on it the placeholder stays as it is, so the secret is never sent to an endpoint that was not granted it. Variables carry no such restriction.
+- A name that cannot be found is left as it is. Seeing `{{vars.…}}` in a provider error means the variable is misspelled or not configured.
+- A header written here overrides the one the plugin sends itself — `Authorization`, for instance — so **API Key** can stay empty when the header carries the credential.
+- Names must be valid header names and values must be strings; a name may not repeat case-insensitively. A malformed object is reported when you save the settings.
+- **Import from SiYuan** copies the provider's headers too. SiYuan added that field in 3.8.4, so on an older version the imported headers are simply empty.
 
 ### Applying titles
 
@@ -140,6 +160,7 @@ Enable **Debug mode** in the settings and open the console. It prints the full r
 | `HTTP 401` | Wrong or missing API key. Messages wants `x-api-key`; the plugin sends it for every host except OpenRouter. |
 | `max_completion_tokens` in an error (Chat Completions) | Your provider only accepts `max_tokens`. The plugin retries with the right name automatically; seeing this twice means the retry also failed. |
 | `HTTP 400` mentioning an unknown parameter | Your provider rejects `reasoning_effort`. Set **Thinking effort** to **Default**. |
+| A `{{vars.…}}` or `{{secrets.…}}` sent as-is in a custom header | The name does not exist, or the secret's allowed-hosts list does not contain the base URL's host. Secrets are substituted only on their allowed hosts. |
 | `Anthropic thinking needs an output token limit of at least 2048` | A thinking level is selected while **Max output tokens** is too small. Raise it, or set **Thinking effort** to **Default**. |
 | The model returns nothing | Reasoning may have consumed the whole output budget. Raise **Max output tokens** or set **Thinking effort** to **Disabled**. |
 | Titles not in the language you want | Change **Title language**. It defaults to your SiYuan interface language. |
