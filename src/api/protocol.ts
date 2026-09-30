@@ -84,8 +84,11 @@ function trimBase(baseURL: string): string {
     return baseURL.trim().replace(/\/+$/, "");
 }
 
-/** 取主机名，用于少数需要按端点决定请求体的字段。 */
-function hostOf(baseURL: string): string {
+/**
+ * 取主机名，用于少数需要按端点决定请求体的字段。
+ * 导出去是因为自定义请求头也要按目标主机决定密钥是否插值（见 headers.ts）。
+ */
+export function hostOf(baseURL: string): string {
     try {
         return new URL(baseURL.trim()).hostname.toLowerCase();
     } catch {

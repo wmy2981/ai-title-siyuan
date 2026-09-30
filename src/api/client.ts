@@ -11,7 +11,15 @@
 import {fetchSyncPost} from "siyuan";
 import {type ApiSettings, type BehaviorSettings} from "../config";
 import {debug, debugError, debugModelText, debugRequest, debugResponse} from "../debug";
-import {adapterFor, ApiError, EMPTY_CONTENT, type ChatParams, type ChatResult} from "./protocol";
+import {withCustomHeaders} from "./headers";
+import {
+    adapterFor,
+    ApiError,
+    EMPTY_CONTENT,
+    type ChatParams,
+    type ChatResult,
+    type ProtocolAdapter,
+} from "./protocol";
 
 // 错误类型、哨兵与结果类型由 api 层对外暴露：调用方只认 client.ts 这一个入口
 export {ApiError, EMPTY_CONTENT} from "./protocol";
@@ -106,6 +114,16 @@ function buildProxyRequest(headers: Record<string, string>, timeout: number, ext
     };
 }
 
+/**
+ * 本次请求实际发出的请求头：协议自带的鉴权头，加上配置里的自定义头（后者覆盖同名项）。
+ *
+ * 自定义头在这里才解析占位符 —— 变量可能刚被别的插件按会话改写，
+ * 而且获取模型列表、测试连接与生成走的是同一条路径，不该有一处漏带（#24）。
+ */
+function requestHeaders(adapter: ProtocolAdapter, api: ApiSettings): Record<string, string> {
+    return withCustomHeaders(adapter.headers(api), api);
+}
+
 function headerValue(headers: Record<string, string>, name: string): string | undefined {
     const wanted = name.toLowerCase();
     for (const [key, value] of Object.entries(headers)) {
@@ -155,7 +173,7 @@ export async function chat(
                 {role: "system", content: params.system},
                 {role: "user", content: params.user},
             ]);
-            const request = buildProxyRequest(adapter.headers(api), behavior.timeout, {
+            const request = buildProxyRequest(requestHeaders(adapter, api), behavior.timeout, {
                 url,
                 method: "POST",
                 payload,
@@ -221,7 +239,7 @@ export async function chat(
 export async function listModels(api: ApiSettings, timeout: number): Promise<string[]> {
     const adapter = adapterFor(api.protocol);
     const url = adapter.modelsURL(api.baseURL);
-    const request = buildProxyRequest(adapter.headers(api), timeout, {url, method: "GET"});
+    const request = buildProxyRequest(requestHeaders(adapter, api), timeout, {url, method: "GET"});
     const response = parseProxyData(await fetchSyncPost(PROXY_URL, request), url);
     if (response.status >= 400) {
         throw new Error(describeHttpError(response.status, extractErrorMessage(response.body)));

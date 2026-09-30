@@ -129,6 +129,17 @@ export interface ApiSettings {
     protocol: Protocol;
     baseURL: string;
     apiKey: string;
+    /**
+     * 自定义请求头，一个 JSON 对象文本，如 `{"x-opencode-session": "{{vars.SESSION}}"}`。
+     *
+     * 存文本而不是解析好的对象：思源自己的供应商页面也是这么编辑的，两边可以直接对拷，
+     * 导入时也不必经过一次「解析失败就丢掉」的转换。代价是手滑写坏 JSON 只能在保存或
+     * 发请求时才发现，所以设置页保存前会校验一遍（见 headers.ts 的 parseCustomHeaders）。
+     *
+     * 取值里的 `{{vars.NAME}}` 与 `{{secrets.NAME}}` 在**每次请求前**替换，配置里存的
+     * 始终是引用文本 —— 变量可能被别的插件按会话改写。
+     */
+    customHeaders: string;
     model: string;
     /** 思考强度，空串表示不发送 reasoning_effort。 */
     reasoningEffort: ReasoningEffort;
@@ -242,6 +253,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
         protocol: PROTOCOL_CHAT_COMPLETIONS,
         baseURL: "",
         apiKey: "",
+        customHeaders: "",
         model: "",
         reasoningEffort: REASONING_DEFAULT,
         disableThinking: THINKING_DISABLED,
@@ -301,6 +313,11 @@ export function mergeSettings(stored: unknown): PluginSettings {
     // 与其让请求按错误的格式发出去，不如退回 Chat Completions。
     if (!isProtocol(api.protocol)) {
         api.protocol = DEFAULT_SETTINGS.api.protocol;
+    }
+    // 请求头是 JSON 对象文本，真被手改成对象或数组时按「没有自定义请求头」处理：
+    // 留着它只会在第一次解析时炸成 `text.trim is not a function` 这种看不懂的报错。
+    if (typeof api.customHeaders !== "string") {
+        api.customHeaders = DEFAULT_SETTINGS.api.customHeaders;
     }
     // 旧版的「禁用思考」开关折算成思考强度的「禁用」档：用户想要的是「明确要求不推理」，
     // 而不是「不发送这个字段」，两者在新界面里是不同的档位，不能混为一谈。
