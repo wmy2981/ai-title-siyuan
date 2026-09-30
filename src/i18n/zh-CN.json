@@ -17,6 +17,10 @@
   "apiKey": "API Key",
   "apiKeyDesc": "Chat Completions 与 Responses 以 Authorization: Bearer 发送，Messages 以 x-api-key 发送；接口无需密钥时留空",
 
+  "customHeaders": "自定义请求头",
+  "customHeadersDesc": "填一个 JSON 对象，如 {\"x-opencode-session\": \"{{vars.SESSION}}\"}。取值里可用 {{vars.名字}} 引用变量、{{secrets.名字}} 引用密钥，每次请求前替换，其中密钥只在其「允许主机」包含 Base URL 的域名时才替换。这里写了的请求头会覆盖插件自己发出的同名头",
+  "customHeadersPlaceholder": "{\"Authorization\":\"Bearer {{secrets.API_KEY}}\"}",
+
   "modelName": "模型名称",
   "modelNameDesc": "可直接输入，或点「获取模型列表」后选择",
   "fetchModels": "获取模型列表",
@@ -26,12 +30,12 @@
   "modelEmpty": "没有匹配的模型",
 
   "importFromSiyuan": "从思源设置获取",
-  "importFromSiyuanDesc": "复制思源里已配置供应商的 Base URL、API Key 和模型名称；导入后插件保存自己的副本",
+  "importFromSiyuanDesc": "复制思源里已配置供应商的 Base URL、API Key、自定义请求头与模型名称；导入后插件保存自己的副本",
   "importDialogTitle": "导入供应商配置",
   "importApply": "导入",
   "importUnsupported": "协议不支持",
   "importUnsupportedHint": "该供应商使用 {protocol}，插件只实现了 Chat Completions、Responses 与 Anthropic Messages，请求格式对不上",
-  "importEmpty": "思源设置里没有已填写 API Key 的 AI 供应商。",
+  "importEmpty": "思源设置里没有已填写 API Key 或鉴权请求头的 AI 供应商。",
 
   "reasoningEffort": "思考强度",
   "reasoningEffortDesc": "Chat Completions 以 reasoning_effort 发送，Responses 以 reasoning.effort 发送，Messages 换算成 thinking（低档就是接口要求的 1024 预算下限，所以输出上限至少要 2048）。「禁用」明确要求模型不推理，「默认」不发送该字段、交由供应商决定。严格的接口会直接拒绝这个参数",

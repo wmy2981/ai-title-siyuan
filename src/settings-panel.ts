@@ -63,7 +63,24 @@ interface SiyuanProvider {
     baseURL?: string;
     apiKey?: string;
     protocol?: string;
+    /** 供应商自定义请求头，形如 {"x-opencode-session": "{{vars.SESSION}}"}。 */
+    headers?: Record<string, string>;
     models?: ProviderModel[];
+}
+
+/**
+ * 供应商是否靠自己配的请求头鉴权（与思源自己的判定一致：
+ * app/src/config/tabs/ai/aiProviderHeaders.ts 的 hasProviderHeaderAuth）。
+ * 这类供应商的 API Key 本来就是空的，导入时不能因为它们「没填 key」就把它们筛掉。
+ */
+function hasHeaderAuth(headers: Record<string, string> | undefined): boolean {
+    return Object.entries(headers ?? {}).some(([name, value]) =>
+        ["authorization", "x-api-key", "api-key"].includes(name.toLowerCase()) && value.trim() !== "");
+}
+
+/** 请求头按 JSON 对象写进设置页的文本框；没有请求头时留空。 */
+function formatHeaders(headers: Record<string, string> | undefined): string {
+    return headers && Object.keys(headers).length > 0 ? JSON.stringify(headers, null, 2) : "";
 }
 
 /**
@@ -445,6 +462,19 @@ function buildApiGroup(root: HTMLElement, t: T, settings: PluginSettings): Sync 
     });
     rowItem(items, t("apiKey"), t("apiKeyDesc"), apiKey);
 
+    // 与思源自己的供应商页面一样用一个 JSON 文本框：两边可以整段对拷，
+    // 而「自定义请求头」这种名字与取值都不固定的东西列成表单反而更难看
+    const customHeaders = textarea(3);
+    customHeaders.spellcheck = false;
+    customHeaders.placeholder = t("customHeadersPlaceholder");
+    customHeaders.addEventListener("input", () => {
+        api.customHeaders = customHeaders.value;
+    });
+    syncs.push(() => {
+        customHeaders.value = api.customHeaders;
+    });
+    stackItem(items, t("customHeaders"), t("customHeadersDesc"), customHeaders);
+
     // 已拉取到的模型名，供输入框的下拉使用；为空表示还没拉过
     let availableModels: string[] = [];
 
@@ -624,10 +654,11 @@ function protocolName(protocol: string, t: T): string {
     }
 }
 
-/** 从思源自身的 AI 供应商配置里一次性复制 Base URL / API Key / 模型。 */
+/** 从思源自身的 AI 供应商配置里一次性复制 Base URL / API Key / 请求头 / 模型。 */
 function openImportDialog(t: T, settings: PluginSettings, onImported: () => void): void {
     const providers = readSiyuanProviders().filter((provider) =>
-        (provider.apiKey ?? "") !== "" && (provider.baseURL ?? "") !== "");
+        (provider.baseURL ?? "") !== "" &&
+        ((provider.apiKey ?? "") !== "" || hasHeaderAuth(provider.headers)));
 
     if (providers.length === 0) {
         showMessage(t("importEmpty"), 8000, "error");
@@ -676,6 +707,9 @@ function openImportDialog(t: T, settings: PluginSettings, onImported: () => void
         choose.addEventListener("click", () => {
             settings.api.baseURL = provider.baseURL ?? "";
             settings.api.apiKey = provider.apiKey ?? "";
+            // 请求头一起带过来：靠自定义头鉴权、或要求会话头的供应商全靠它（#24）；
+            // 供应商没配请求头时清空，导入是整体替换而不是叠加
+            settings.api.customHeaders = formatHeaders(provider.headers);
             // 只取一个模型作为起点，用户仍可在设置页改或重新拉取列表
             settings.api.model = activeModelName(provider);
             // 协议跟着思源里的设置走，不写死：支持列表变了这里不用改

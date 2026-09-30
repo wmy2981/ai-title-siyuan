@@ -6,6 +6,7 @@
  */
 import {getActiveEditor, Plugin, showMessage, hideMessage} from "siyuan";
 import type {ICommandContext, IMenu, IProtyle, TEventBus} from "siyuan";
+import {parseCustomHeaders} from "./api/headers";
 import {applyGeneratedSilently, openGenerateDialog, type NoteInfo} from "./dialog";
 import {
     DEFAULT_SETTINGS,
@@ -70,6 +71,9 @@ export default class AiTitlePlugin extends Plugin {
             t: this.t,
             settings: this.settings,
             onSave: async (next) => {
+                // 自定义请求头是手写的 JSON：在这里先解析一遍，写错时保存就会失败并说明原因，
+                // 而不是等到第一次生成才报错（那时用户多半已经忘了自己填过什么）
+                parseCustomHeaders(next.api.customHeaders);
                 this.settings = next;
                 setDebug(next.ui.debug);
                 await this.saveData(STORAGE_NAME, next);
@@ -83,7 +87,12 @@ export default class AiTitlePlugin extends Plugin {
     private redactedSettings(settings: PluginSettings): PluginSettings {
         return {
             ...settings,
-            api: {...settings.api, apiKey: settings.api.apiKey === "" ? "" : "(redacted)"},
+            api: {
+                ...settings.api,
+                apiKey: settings.api.apiKey === "" ? "" : "(redacted)",
+                // 取值里常直接写着密钥（不只是 {{secrets.…}} 引用），整段都不进日志
+                customHeaders: settings.api.customHeaders === "" ? "" : "(redacted)",
+            },
         };
     }
 
