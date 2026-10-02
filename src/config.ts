@@ -84,7 +84,7 @@ export const MEDIA_PLACEHOLDER = "placeholder";
 export const MEDIA_RAW = "raw";
 export const MEDIA_OPTIONS = [MEDIA_DROP, MEDIA_PLACEHOLDER, MEDIA_RAW] as const;
 
-/** 正文里链接、图片、音视频与 iframe 的处理方式。 */
+/** 正文里链接、图片、音视频、iframe 与插件自定义块的处理方式。 */
 export type MediaMode = (typeof MEDIA_OPTIONS)[number];
 
 export const TRUNCATE_HEAD = "head";
@@ -165,7 +165,7 @@ export interface BehaviorSettings {
     truncateMode: TruncateMode;
     /** 「开头 + 末尾」时开头所占比例，0 到 1。 */
     truncateHeadRatio: number;
-    /** 链接、图片、音视频与 iframe 的处理方式。 */
+    /** 链接、图片、音视频、iframe 与插件自定义块的处理方式。 */
     mediaMode: MediaMode;
     /** 是否把文档当前标题一并传入（正文与目录各加一行 H1）。 */
     includeTitle: boolean;

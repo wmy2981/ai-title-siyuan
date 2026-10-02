@@ -71,7 +71,7 @@ Open **Settings → Marketplace → Downloaded → AI Title → Settings**.
 | Behaviour | Note body limit | `1000` characters | Counts the body only: the note id and its outline are never cut. |
 | Behaviour | Over-long notes | Keep the beginning | Keep the beginning, the end, both ends (split by the share below), or always send the whole body. |
 | Behaviour | Beginning share | `0.5` | Shown for **Keep both ends** only: the fraction of the budget the beginning gets. |
-| Behaviour | Links, images and media | Short placeholder | Replace them with tokens such as `[image]` and `[file(.pdf)]`, drop them, or keep them as they are. |
+| Behaviour | Links, images and custom blocks | Short placeholder | Replace them with tokens such as `[image]`, `[file(.pdf)]` and `[button]`, drop them, or keep them as they are. |
 | Behaviour | Include the current title | On | Sends the title the note already has together with the body and the outline. |
 | Behaviour | Send the note outline | Only when the body is truncated | Never, when the body was cut short, or always. The outline itself is never truncated. |
 | Behaviour | Notes per request | `3` | Selecting more splits the work into batches. |
@@ -144,6 +144,7 @@ Four entry points, all doing the same thing:
 ## Notes and limits
 
 - **Content is read with `/api/export/exportMdContent`**, not from the editor buffer. Exporting produces clean Markdown without the block attribute lines that the kramdown API appends.
+- **Plugin custom blocks go through the same setting.** They reach the export as a `;;;plugin-name/block-type` fence, and the short placeholder keeps the block type alone — `[button]` for a button block. Both the placeholder and the drop mode keep the block content, a whole JSON payload for a button, out of the request.
 - **A note with no content is skipped** rather than sent, so the model cannot invent a title for an empty document.
 - **A note the model does not return a title for is reported as a failure.** The plugin never guesses a mapping or falls back to a positional match, because that would write a title onto an unrelated note.
 - **`reasoning_content` is read as a fallback** when `content` comes back empty, since some models put the entire answer there.

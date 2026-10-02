@@ -8,6 +8,7 @@
 import {fetchSyncPost} from "siyuan";
 import {
     MEDIA_DROP,
+    MEDIA_PLACEHOLDER,
     MEDIA_RAW,
     TOC_ALWAYS,
     TOC_TRUNCATED,
@@ -24,7 +25,7 @@ export interface NoteContent {
     id: string;
     /** 文档当前标题；未启用或取不到时为空串。 */
     title: string;
-    /** 笔记正文，对应提示词里的 <body>：已按设置处理媒体引用并截取。 */
+    /** 笔记正文，对应提示词里的 <body>：已按设置处理媒体引用与自定义块并截取。 */
     body: string;
     /** 笔记目录，对应提示词里的 <toc>：不截取；未启用或没有标题时为空串。 */
     toc: string;
@@ -49,8 +50,35 @@ const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "s
 const AUDIO_EXTENSIONS = new Set(["mp3", "wav", "m4a", "flac", "ogg", "oga", "aac", "opus", "wma"]);
 const VIDEO_EXTENSIONS = new Set(["mp4", "webm", "mov", "mkv", "avi", "wmv", "flv", "m4v", "mpg", "mpeg"]);
 
-/** 替换媒体引用时写进正文的占位符，判断空笔记时要把它们摘掉。 */
+/** 替换媒体引用时写进正文的固定占位符，判断空笔记时要把它们摘掉。 */
 const PLACEHOLDER_TOKENS = /\[(?:image|audio|video|iframe|link|file(?:\(\.[a-z0-9]+\))?)\]/gi;
+
+/**
+ * 导出正文里自定义块的围栏：首行是 `;;;插件包名/块类型`，末行是单独的 `;;;`。
+ *
+ * 形状跟着 Lute 的解析规则走（parseCustomBlock 与 isCustomBlockClose）：首行是三个分号加一段
+ * 不含分号、不含空白的块信息，末行去掉首尾空白后只剩三个分号。中间惰性匹配到最近的一行结束
+ * 围栏，与解析器「遇到结束围栏就收尾」一致。首行允许缩进，列表里的自定义块会带缩进。
+ */
+const CUSTOM_BLOCK_FENCE = /^[ \t]*;;;[ \t]*([^;\s]+)[^;\r\n]*\r?\n[\s\S]*?^[ \t]*;;;[ \t]*\r?$/gm;
+
+/**
+ * 自定义块的占位符：块信息是「插件包名/块类型」（两段都已按 URI 组件编码），只用块类型那一段。
+ *
+ * 先按 `/` 切开再解码：编码过的 `/` 是 `%2F`，顺序反了会把名字里的斜杠当成两段的间隔符。
+ * 编码残缺时原样使用，取不到块类型时退回整段块信息。
+ */
+function customBlockToken(info: string): string {
+    const separator = info.lastIndexOf("/");
+    const encoded = separator === -1 ? info : info.slice(separator + 1);
+    let name = encoded === "" ? info : encoded;
+    try {
+        name = decodeURIComponent(name);
+    } catch {
+        // 手改过的数据里可能是残缺的 % 转义，原样用
+    }
+    return `[${name}]`;
+}
 
 function extensionOf(url: string): string {
     return /\.([a-z0-9]+)$/i.exec(url.split(/[?#]/)[0])?.[1]?.toLowerCase() ?? "";
@@ -91,24 +119,47 @@ function linkPlaceholder(url: string): string {
     return `[file(.${extension})]`;
 }
 
+/** replaceMedia 的返回值。 */
+export interface MediaHandling {
+    /** 处理后的正文。 */
+    text: string;
+    /**
+     * 插件自己写进正文的自定义块占位符。
+     *
+     * 它们随块类型变化，写不进固定的 PLACEHOLDER_TOKENS，判断空笔记时要由调用方一并摘掉。
+     */
+    customTokens: string[];
+}
+
 /**
- * 按设置处理正文里的链接、图片、嵌入的音视频与 iframe。
+ * 按设置处理正文里的链接、图片、嵌入的音视频、iframe 与自定义块。
  *
  * 这些内容对判断主题几乎没有价值，却会占掉不少字符预算：
- * 一条 assets 路径动辄几十个字符，而模型只需要知道「这里有一张图」。
+ * 一条 assets 路径动辄几十个字符，而模型只需要知道「这里有一张图」；
+ * 自定义块更占地方，按钮块的块内容是一整段 JSON。
  * 保留占位符而不是直接丢弃，是为了让模型知道原文在哪儿断开了，
  * 免得它把前后两段不相干的文字当成一句话来读。
  */
-function replaceMedia(markdown: string, mode: MediaMode): string {
+export function replaceMedia(markdown: string, mode: MediaMode): MediaHandling {
     if (mode === MEDIA_RAW) {
-        return markdown;
+        return {text: markdown, customTokens: []};
     }
     const keep = (label: string): string => (mode === MEDIA_DROP ? "" : label);
-    return markdown
+    // 自定义块排在最前：块内容里也有链接和图片，整块先摘掉就不必再逐条替换
+    const customTokens: string[] = [];
+    const withoutBlocks = markdown.replace(CUSTOM_BLOCK_FENCE, (_match, info: string) => {
+        const token = customBlockToken(info);
+        if (mode === MEDIA_PLACEHOLDER) {
+            customTokens.push(token);
+        }
+        return keep(token);
+    });
+    const text = withoutBlocks
         // 音视频与内嵌 iframe 在思源导出里是原样保留的 HTML 标签
         .replace(/<(iframe|video|audio)\b[^>]*?(?:\/>|>[\s\S]*?<\/\1>)/gi, (_match, tag: string) => keep(`[${tag.toLowerCase()}]`))
         .replace(/!\[[^\]]*\]\(([^)\s]+)[^)]*\)/g, (_match, url: string) => keep(imagePlaceholder(url)))
         .replace(/\[([^\]]*)\]\(([^)\s]+)[^)]*\)/g, (_match, _text: string, url: string) => keep(linkPlaceholder(url)));
+    return {text, customTokens};
 }
 
 function normalizeWhitespace(markdown: string): string {
@@ -167,11 +218,15 @@ export function truncate(text: string, mode: TruncateMode, limit: number, headRa
  * 纯 Markdown 结构一律不算内容，否则一篇只剩 `# ---` 的空文档会被当成
  * 有内容发去请求，模型只能凭空编一个标题。
  *
- * 媒体占位符必须先摘掉 —— `[image]` 里的字母是插件自己写进去的，
- * 一张图配一行字的笔记没有它反而才被判成空。
+ * 占位符必须先摘掉 —— 括号里的字是插件自己写进去的，不是笔记的内容：
+ * 内置的那几个列在 PLACEHOLDER_TOKENS 里，自定义块的随块类型变化，由调用方传进来。
+ * 一张图或一个自定义块配一行字的笔记，不该靠占位符里那几个字母冒充内容。
  */
-function hasSubstance(text: string): boolean {
-    const plain = text.replace(PLACEHOLDER_TOKENS, "").replace(/<\/?[a-z][^>]*>/gi, "");
+function hasSubstance(text: string, customTokens: readonly string[]): boolean {
+    let plain = text.replace(PLACEHOLDER_TOKENS, "").replace(/<\/?[a-z][^>]*>/gi, "");
+    for (const token of customTokens) {
+        plain = plain.replaceAll(token, "");
+    }
     return /[\p{L}\p{N}]/u.test(plain);
 }
 
@@ -303,11 +358,12 @@ export async function fetchNoteContent(id: string, behavior: BehaviorSettings): 
     }
 
     const raw = response.data?.content ?? "";
-    const cleaned = normalizeWhitespace(replaceMedia(raw, behavior.mediaMode));
+    const handled = replaceMedia(raw, behavior.mediaMode);
+    const cleaned = normalizeWhitespace(handled.text);
     // 空笔记只看正文本身：文档标题不算内容，否则一篇只有标题的空文档
     // 会被当成「有内容」发去请求，模型只能把现有标题换个说法再还回来。
     // 目录同理不算内容，它只描述结构。
-    const empty = !hasSubstance(cleaned);
+    const empty = !hasSubstance(cleaned, handled.customTokens);
     const title = behavior.includeTitle ? await readTitle(id) : "";
     // 标题拼在正文最前面，因此同样受长度上限约束，<body> 永远不会超出额度
     const titled = title === "" ? cleaned : `# ${title}\n\n${cleaned}`;
