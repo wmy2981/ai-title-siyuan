@@ -20,6 +20,7 @@ import {getDocTitle} from "./content";
 import {debug, debugJson, setDebug} from "./debug";
 import {makeT, type T} from "./i18n";
 import {generateTitles, type GenerateOutcome, type NoteResult} from "./pipeline";
+import {sealSettings, unsealSettings} from "./secret";
 import {openSettingsPanel} from "./settings-panel";
 import {ICON_ID, ICON_SVG} from "./icons";
 import "./index.scss";
@@ -76,7 +77,7 @@ export default class AiTitlePlugin extends Plugin {
                 parseCustomHeaders(next.api.customHeaders);
                 this.settings = next;
                 setDebug(next.ui.debug);
-                await this.saveData(STORAGE_NAME, next);
+                await this.persist(next);
                 debugJson("Settings saved", this.redactedSettings(next));
                 this.syncUiEntries();
             },
@@ -90,15 +91,25 @@ export default class AiTitlePlugin extends Plugin {
             api: {
                 ...settings.api,
                 apiKey: settings.api.apiKey === "" ? "" : "(redacted)",
+                apiKeyEncrypted: settings.api.apiKeyEncrypted === "" ? "" : "(redacted)",
                 // 取值里常直接写着密钥（不只是 {{secrets.…}} 引用），整段都不进日志
                 customHeaders: settings.api.customHeaders === "" ? "" : "(redacted)",
             },
         };
     }
 
+    /**
+     * 落盘。API Key 是在这一步才换成密文的：内存与设置页里始终是明文，
+     * 数据目录里只有密文（取不到思源数据仓库密钥时才退回明文，见 secret.ts）。
+     */
+    private async persist(settings: PluginSettings): Promise<void> {
+        await this.saveData(STORAGE_NAME, await sealSettings(settings));
+    }
+
     private async loadSettings(): Promise<void> {
         const stored = await this.loadData(STORAGE_NAME);
-        this.settings = mergeSettings(stored);
+        const {settings, needsWrite, unreadable} = await unsealSettings(mergeSettings(stored));
+        this.settings = settings;
         setDebug(this.settings.ui.debug);
 
         // 首次运行时标题语言跟随思源界面语言，之后以用户设置为准。
@@ -110,6 +121,19 @@ export default class AiTitlePlugin extends Plugin {
                 (window as unknown as {siyuan?: {config?: {lang?: string}}}).siyuan?.config?.lang ?? "en",
             );
         }
+
+        // 解不开时按「清空 Key」处理，并且必须说一声：Key 无声消失只会让人以为插件坏了。
+        // 用 info 而不是 error —— 这不是故障，是数据仓库密钥换了之后必然的结果。
+        if (unreadable) {
+            debug("Stored API key could not be decrypted, cleared it");
+            showMessage(this.t("apiKeyUnreadable"), 12000);
+        }
+        // 旧版存下的明文 Key：当场迁移成密文，别等用户下次打开设置页才换
+        if (needsWrite) {
+            debug("Rewriting stored settings (plaintext API key or undecryptable ciphertext)");
+            await this.persist(this.settings);
+        }
+
         debug(`Settings loaded (debug mode on)`);
         debugJson("Settings loaded", this.redactedSettings(this.settings));
     }

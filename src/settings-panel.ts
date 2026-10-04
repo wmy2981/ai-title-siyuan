@@ -49,6 +49,7 @@ import {
 } from "./config";
 import {setDebug} from "./debug";
 import type {T} from "./i18n";
+import {canEncrypt} from "./secret";
 
 interface ProviderModel {
     id?: string;
@@ -460,7 +461,9 @@ function buildApiGroup(root: HTMLElement, t: T, settings: PluginSettings): Sync 
     syncs.push(() => {
         apiKey.value = api.apiKey;
     });
-    rowItem(items, t("apiKey"), t("apiKeyDesc"), apiKey);
+    // 拿不到思源数据仓库密钥时，这个 Key 只能明文落盘，必须当场说明（#26）：
+    // 换成密码框之后用户没有任何办法从界面上看出它到底有没有被加密
+    rowItem(items, t("apiKey"), canEncrypt() ? t("apiKeyDesc") : `${t("apiKeyDesc")} ${t("apiKeyDescInsecure")}`, apiKey);
 
     // 与思源自己的供应商页面一样用一个 JSON 文本框：两边可以整段对拷，
     // 而「自定义请求头」这种名字与取值都不固定的东西列成表单反而更难看

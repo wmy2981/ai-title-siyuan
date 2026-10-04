@@ -16,6 +16,8 @@
 
   "apiKey": "API Key",
   "apiKeyDesc": "Chat Completions 与 Responses 以 Authorization: Bearer 发送，Messages 以 x-api-key 发送；接口无需密钥时留空",
+  "apiKeyDescInsecure": "未检测到思源数据仓库密钥，API Key 会以明文保存在插件数据目录里。在思源「设置 → 数据仓库密钥」里初始化之后即可改为加密保存",
+  "apiKeyUnreadable": "已保存的 API Key 无法解密（数据仓库密钥已变更），已清空，请在插件设置里重新填写",
 
   "customHeaders": "自定义请求头",
   "customHeadersDesc": "填一个 JSON 对象，如 {\"x-opencode-session\": \"{{vars.SESSION}}\"}。取值里可用 {{vars.名字}} 引用变量、{{secrets.名字}} 引用密钥，每次请求前替换，其中密钥只在其「允许主机」包含 Base URL 的域名时才替换。这里写了的请求头会覆盖插件自己发出的同名头",

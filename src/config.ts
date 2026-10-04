@@ -130,6 +130,15 @@ export interface ApiSettings {
     baseURL: string;
     apiKey: string;
     /**
+     * 落盘的 API Key 密文（AES-GCM 信封，见 secret.ts）。内存里始终为空：
+     * 读回时立刻解成明文，写回时重新生成。
+     *
+     * 单独一个字段而不是把密文塞进 apiKey：apiKey 在内存里必须是明文（设置页要显示、
+     * 请求头要拼），两者共用一个字段的话，「这里到底是明文还是密文」只能靠前缀去猜，
+     * 猜错就是把密文当密钥发出去。
+     */
+    apiKeyEncrypted: string;
+    /**
      * 自定义请求头，一个 JSON 对象文本，如 `{"x-opencode-session": "{{vars.SESSION}}"}`。
      *
      * 存文本而不是解析好的对象：思源自己的供应商页面也是这么编辑的，两边可以直接对拷，
@@ -253,6 +262,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
         protocol: PROTOCOL_CHAT_COMPLETIONS,
         baseURL: "",
         apiKey: "",
+        apiKeyEncrypted: "",
         customHeaders: "",
         model: "",
         reasoningEffort: REASONING_DEFAULT,
@@ -318,6 +328,14 @@ export function mergeSettings(stored: unknown): PluginSettings {
     // 留着它只会在第一次解析时炸成 `text.trim is not a function` 这种看不懂的报错。
     if (typeof api.customHeaders !== "string") {
         api.customHeaders = DEFAULT_SETTINGS.api.customHeaders;
+    }
+    // 密钥与密文同理：被手改成数字或对象时按「没填」处理。
+    // 密文尤其要紧 —— 解密路径会先 split，非字符串会在那里炸成看不懂的报错。
+    if (typeof api.apiKey !== "string") {
+        api.apiKey = DEFAULT_SETTINGS.api.apiKey;
+    }
+    if (typeof api.apiKeyEncrypted !== "string") {
+        api.apiKeyEncrypted = DEFAULT_SETTINGS.api.apiKeyEncrypted;
     }
     // 旧版的「禁用思考」开关折算成思考强度的「禁用」档：用户想要的是「明确要求不推理」，
     // 而不是「不发送这个字段」，两者在新界面里是不同的档位，不能混为一谈。

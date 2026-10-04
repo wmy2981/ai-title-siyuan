@@ -16,6 +16,8 @@
 
   "apiKey": "API Key",
   "apiKeyDesc": "Sent as Authorization: Bearer on Chat Completions and Responses, and as x-api-key on Messages. Leave empty if your endpoint needs no key",
+  "apiKeyDescInsecure": "No SiYuan data repo key was found, so the API key is kept in plain text in the plugin data directory. Initialize the data repo key under SiYuan Settings → Data repo key to store it encrypted",
+  "apiKeyUnreadable": "The stored API key could not be decrypted (the data repo key changed), so it has been cleared. Please enter it again in the plugin settings",
 
   "customHeaders": "Custom headers",
   "customHeadersDesc": "A JSON object, e.g. {\"x-opencode-session\": \"{{vars.SESSION}}\"}. A value may reference a SiYuan variable as {{vars.NAME}} or a secret as {{secrets.NAME}}; both are resolved before every request, and a secret is substituted only when its allowed hosts list contains the base URL's host. A header written here overrides the one the plugin sends itself",
