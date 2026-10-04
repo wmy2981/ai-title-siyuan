@@ -3,13 +3,17 @@ import {
     DEFAULT_SETTINGS,
     defaultTitleLanguage,
     hasProviderConfig,
+    hasProviderEndpoint,
+    isAdapterProtocol,
     isProtocol,
     mergeSettings,
     PROTOCOL_ANTHROPIC_MESSAGES,
     PROTOCOL_CHAT_COMPLETIONS,
-    PROTOCOL_RESPONSES,
+    PROTOCOL_SIYUAN_PROVIDER,
+    PROTOCOLS,
     REASONING_DEFAULT,
     REASONING_EFFORT_OFF,
+    type ApiSettings,
 } from "../src/config";
 
 describe("mergeSettings（旧配置兼容）", () => {
@@ -26,14 +30,32 @@ describe("mergeSettings（旧配置兼容）", () => {
         expect(merged.ui.debug).toBe(false);
     });
 
-    it("三个协议都保留，认不出来的取值退回 Chat Completions（#8 #20）", () => {
-        for (const protocol of [PROTOCOL_CHAT_COMPLETIONS, PROTOCOL_RESPONSES, PROTOCOL_ANTHROPIC_MESSAGES]) {
+    it("四个协议取值都保留，认不出来的取值退回 Chat Completions（#8 #20 #27）", () => {
+        for (const protocol of PROTOCOLS) {
             expect(mergeSettings({api: {protocol}}).api.protocol).toBe(protocol);
         }
         expect(mergeSettings({api: {protocol: "gemini"}}).api.protocol).toBe(PROTOCOL_CHAT_COMPLETIONS);
-        expect(mergeSettings({api: {}}).api.protocol).toBe(PROTOCOL_CHAT_COMPLETIONS);
         expect(isProtocol("anthropic-messages")).toBe(true);
         expect(isProtocol("anthropic")).toBe(false);
+        // 「使用思源设置中供应商」是一种配置来源，不是能拿去发请求的协议
+        expect(isAdapterProtocol("siyuan")).toBe(false);
+        expect(isAdapterProtocol("openai-responses")).toBe(true);
+    });
+
+    it("新装默认「使用思源设置中供应商」，老配置里的协议原样保留（#27）", () => {
+        expect(mergeSettings(undefined).api.protocol).toBe(PROTOCOL_SIYUAN_PROVIDER);
+        expect(DEFAULT_SETTINGS.api.protocol).toBe(PROTOCOL_SIYUAN_PROVIDER);
+        // 协议字段从 v0.1.0 起就在，所以存过的配置一定带着自己的取值，不会被新默认值切走
+        expect(mergeSettings({api: {protocol: PROTOCOL_ANTHROPIC_MESSAGES}}).api.protocol)
+            .toBe(PROTOCOL_ANTHROPIC_MESSAGES);
+        expect(mergeSettings({api: {}}).api.protocol).toBe(PROTOCOL_SIYUAN_PROVIDER);
+    });
+
+    it("供应商 id 默认留空，存的不是文本时按空处理（#27）", () => {
+        expect(DEFAULT_SETTINGS.api.siyuanProvider).toBe("");
+        expect(mergeSettings({api: {siyuanProvider: "20260913135841-1u2j84c"}}).api.siyuanProvider)
+            .toBe("20260913135841-1u2j84c");
+        expect(mergeSettings({api: {siyuanProvider: 42}}).api.siyuanProvider).toBe("");
     });
 
     it("已弃用的「禁用思考」下拉一律清掉，不再拼进请求体（#14）", () => {
@@ -87,11 +109,34 @@ describe("defaultTitleLanguage（#21 标题语言跟随界面）", () => {
     });
 });
 
-describe("hasProviderConfig", () => {
-    it("地址和模型都填了才算配置好", () => {
-        const api = {...DEFAULT_SETTINGS.api, baseURL: "https://example.com/v1", model: "gpt-5.1"};
+describe("hasProviderConfig（#27 两种模式要填的东西不同）", () => {
+    it("自定义配置看 Base URL 和模型", () => {
+        const api: ApiSettings = {
+            ...DEFAULT_SETTINGS.api,
+            protocol: PROTOCOL_CHAT_COMPLETIONS,
+            baseURL: "https://example.com/v1",
+            model: "gpt-5.1",
+        };
         expect(hasProviderConfig(api)).toBe(true);
+        expect(hasProviderEndpoint(api)).toBe(true);
         expect(hasProviderConfig({...api, model: "  "})).toBe(false);
         expect(hasProviderConfig({...api, baseURL: ""})).toBe(false);
+        expect(hasProviderEndpoint({...api, baseURL: ""})).toBe(false);
+    });
+
+    it("思源供应商模式看供应商和模型，不看 Base URL", () => {
+        const api: ApiSettings = {
+            ...DEFAULT_SETTINGS.api,
+            protocol: PROTOCOL_SIYUAN_PROVIDER,
+            siyuanProvider: "20260913135841-1u2j84c",
+            model: "gpt-5.1",
+        };
+        expect(hasProviderConfig(api)).toBe(true);
+        expect(hasProviderEndpoint(api)).toBe(true);
+        expect(hasProviderConfig({...api, siyuanProvider: " "})).toBe(false);
+        expect(hasProviderEndpoint({...api, siyuanProvider: ""})).toBe(false);
+        // 模型没选时「获取模型列表」仍然可用：它要的只是端点
+        expect(hasProviderEndpoint({...api, model: ""})).toBe(true);
+        expect(hasProviderConfig({...api, model: ""})).toBe(false);
     });
 });

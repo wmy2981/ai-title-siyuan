@@ -9,7 +9,12 @@
   "protocolChatCompletions": "Chat Completions API",
   "protocolResponses": "Responses API",
   "protocolAnthropicMessages": "Anthropic Messages API",
+  "protocolSiyuanProvider": "使用思源设置中供应商",
   "protocolDesc": "按供应商实际提供的接口选择，导入思源配置时会跟着供应商的协议走",
+
+  "provider": "供应商",
+  "providerDesc": "协议、Base URL、API Key 与请求头都按思源「设置 → AI → 供应商」里选中的那条来：插件只记下它的 id，不保存这些值的副本，思源那边改了就跟着变。列表为空时先去思源设置里添加供应商；本页其余参数（温度、思考强度等）仍然生效",
+  "providerPlaceholder": "请选择供应商",
 
   "baseUrl": "Base URL",
   "baseUrlDesc": "按供应商文档填写并带上版本段，如 https://api.openai.com/v1。Messages 协议填到 /v1 即可，插件自己补 /messages",
@@ -125,6 +130,7 @@
   "testConnectionDesc": "按这里填写的参数原样发一次请求（含思考强度），要求模型只回复 \"hi\"，有返回即视为配置正确",
   "testRunning": "测试中…",
   "testNoConfig": "请先填写 Base URL 和模型名称",
+  "testNoConfigProvider": "请先选择供应商并填写模型名称",
   "testOk": "连接正常 —— 模型在 {elapsed} ms 内回复了「{reply}」",
   "testFailed": "连接失败：{message}",
 

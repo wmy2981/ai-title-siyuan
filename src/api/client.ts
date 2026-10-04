@@ -20,6 +20,7 @@ import {
     type ChatResult,
     type ProtocolAdapter,
 } from "./protocol";
+import {resolveApiSettings} from "./siyuan-provider";
 
 // 错误类型、哨兵与结果类型由 api 层对外暴露：调用方只认 client.ts 这一个入口
 export {ApiError, EMPTY_CONTENT} from "./protocol";
@@ -158,8 +159,11 @@ export async function chat(
     api: ApiSettings,
     behavior: BehaviorSettings,
 ): Promise<ChatResult> {
-    const adapter = adapterFor(api.protocol);
-    const url = adapter.completionURL(api.baseURL);
+    // 「使用思源设置中供应商」在这里换成供应商的协议、地址、密钥与请求头（#27）：
+    // 生成、测试连接与获取模型列表走的都是这条路径，不该有一处漏带
+    const target = resolveApiSettings(api);
+    const adapter = adapterFor(target.protocol);
+    const url = adapter.completionURL(target.baseURL);
     const maxAttempts = Math.max(1, behavior.retries + 1);
     let useMaxCompletionTokens = true;
     let lastError: ApiError = new ApiError("No attempt was made", false);
@@ -168,12 +172,12 @@ export async function chat(
     while (attempt < maxAttempts) {
         let response: ProxyResponse;
         try {
-            const payload = adapter.payload(params, api, {useMaxCompletionTokens});
+            const payload = adapter.payload(params, target, {useMaxCompletionTokens});
             debugRequest(url, payload, [
                 {role: "system", content: params.system},
                 {role: "user", content: params.user},
             ]);
-            const request = buildProxyRequest(requestHeaders(adapter, api), behavior.timeout, {
+            const request = buildProxyRequest(requestHeaders(adapter, target), behavior.timeout, {
                 url,
                 method: "POST",
                 payload,
@@ -237,9 +241,10 @@ export async function chat(
 
 /** 拉取供应商的模型列表，用于设置页的「获取模型列表」。 */
 export async function listModels(api: ApiSettings, timeout: number): Promise<string[]> {
-    const adapter = adapterFor(api.protocol);
-    const url = adapter.modelsURL(api.baseURL);
-    const request = buildProxyRequest(requestHeaders(adapter, api), timeout, {url, method: "GET"});
+    const target = resolveApiSettings(api);
+    const adapter = adapterFor(target.protocol);
+    const url = adapter.modelsURL(target.baseURL);
+    const request = buildProxyRequest(requestHeaders(adapter, target), timeout, {url, method: "GET"});
     const response = parseProxyData(await fetchSyncPost(PROXY_URL, request), url);
     if (response.status >= 400) {
         throw new Error(describeHttpError(response.status, extractErrorMessage(response.body)));

@@ -2,6 +2,7 @@ import {beforeEach, describe, expect, it} from "vitest";
 import {
     DEFAULT_SETTINGS,
     PROTOCOL_ANTHROPIC_MESSAGES,
+    PROTOCOL_CHAT_COMPLETIONS,
     PROTOCOL_RESPONSES,
     type ApiSettings,
     type BehaviorSettings,
@@ -32,8 +33,10 @@ function stubReplies(...replies: unknown[]): void {
     });
 }
 
+// 协议必须写死：默认值是「使用思源设置中供应商」，那条路要宿主里真的有供应商才能解析
 const API: ApiSettings = {
     ...DEFAULT_SETTINGS.api,
+    protocol: PROTOCOL_CHAT_COMPLETIONS,
     baseURL: "https://api.openai.com/v1",
     apiKey: "sk-test",
     model: "gpt-5.1",

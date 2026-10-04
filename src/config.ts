@@ -116,17 +116,46 @@ export type TocMode = (typeof TOC_OPTIONS)[number];
 export const PROTOCOL_CHAT_COMPLETIONS = "openai";
 export const PROTOCOL_RESPONSES = "openai-responses";
 export const PROTOCOL_ANTHROPIC_MESSAGES = "anthropic-messages";
-export const PROTOCOLS = [PROTOCOL_CHAT_COMPLETIONS, PROTOCOL_RESPONSES, PROTOCOL_ANTHROPIC_MESSAGES] as const;
 
+/**
+ * 「使用思源设置中供应商」（#27）：协议、Base URL、API Key 与请求头全部现取自思源的
+ * 供应商配置，插件一个字节都不存。
+ *
+ * 它不是一个能拿去发请求的协议，而是一种配置来源 —— 真正用哪个协议由所选供应商标明，
+ * 所以它只出现在设置页的下拉与配置里，适配器分发认的是 ADAPTER_PROTOCOLS。
+ */
+export const PROTOCOL_SIYUAN_PROVIDER = "siyuan";
+
+/** 插件自己实现了请求构造的协议。适配器分发与「供应商的协议认不认」都按它判断。 */
+export const ADAPTER_PROTOCOLS = [
+    PROTOCOL_CHAT_COMPLETIONS,
+    PROTOCOL_RESPONSES,
+    PROTOCOL_ANTHROPIC_MESSAGES,
+] as const;
+
+/** 设置页协议下拉的全部取值：先列默认的配置来源，再列三个具体协议。 */
+export const PROTOCOLS = [PROTOCOL_SIYUAN_PROVIDER, ...ADAPTER_PROTOCOLS] as const;
+
+export type AdapterProtocol = (typeof ADAPTER_PROTOCOLS)[number];
 export type Protocol = (typeof PROTOCOLS)[number];
 
-/** 判断某个取值是否是插件实现了的协议。导入思源配置与读旧配置时都要过一次。 */
+/** 判断某个取值是否是设置页下拉里的合法取值。读旧配置时过一次。 */
 export function isProtocol(value: unknown): value is Protocol {
     return typeof value === "string" && (PROTOCOLS as readonly string[]).includes(value);
 }
 
+/** 判断某个取值是否是插件实现了请求构造的协议。导入思源供应商时用它筛掉不支持的。 */
+export function isAdapterProtocol(value: unknown): value is AdapterProtocol {
+    return typeof value === "string" && (ADAPTER_PROTOCOLS as readonly string[]).includes(value);
+}
+
 export interface ApiSettings {
     protocol: Protocol;
+    /**
+     * 选中的思源供应商 id，只在 protocol 为「使用思源设置中供应商」时有意义（#27）。
+     * 存 id 而不存它的地址与密钥：那些值每次请求前现读，思源那边改了就跟着变。
+     */
+    siyuanProvider: string;
     baseURL: string;
     apiKey: string;
     /**
@@ -259,7 +288,11 @@ Style: {{style}}
 
 export const DEFAULT_SETTINGS: PluginSettings = {
     api: {
-        protocol: PROTOCOL_CHAT_COMPLETIONS,
+        // 新装默认「使用思源设置中供应商」（#27）：装完就能用已经在思源里配好的供应商。
+        // 供应商留空，需要用户自己选一个 —— 这个默认值不会覆盖老配置，
+        // 协议字段从 v0.1.0 起就一直存在，每个存过的配置里都带着自己的取值。
+        protocol: PROTOCOL_SIYUAN_PROVIDER,
+        siyuanProvider: "",
         baseURL: "",
         apiKey: "",
         apiKeyEncrypted: "",
@@ -320,9 +353,15 @@ export function mergeSettings(stored: unknown): PluginSettings {
     api.disableThinking = DEFAULT_SETTINGS.api.disableThinking;
     api.customThinking = "";
     // 手改过的配置文件、或本插件卸载重装后读到的旧配置里，协议可能是插件没实现的取值。
-    // 与其让请求按错误的格式发出去，不如退回 Chat Completions。
+    // 与其让请求按错误的格式发出去，不如退回最通用的 Chat Completions ——
+    // 注意不是退回默认值：「使用思源设置中供应商」要先选供应商，不适合当兜底。
     if (!isProtocol(api.protocol)) {
-        api.protocol = DEFAULT_SETTINGS.api.protocol;
+        api.protocol = PROTOCOL_CHAT_COMPLETIONS;
+    }
+    // 供应商 id 只在「使用思源设置中供应商」下有意义，但类型被手改坏时同样收敛成空串，
+    // 否则后续的 trim 会炸成看不懂的报错。
+    if (typeof api.siyuanProvider !== "string") {
+        api.siyuanProvider = DEFAULT_SETTINGS.api.siyuanProvider;
     }
     // 请求头是 JSON 对象文本，真被手改成对象或数组时按「没有自定义请求头」处理：
     // 留着它只会在第一次解析时炸成 `text.trim is not a function` 这种看不懂的报错。
@@ -361,7 +400,18 @@ export function mergeSettings(stored: unknown): PluginSettings {
     };
 }
 
+/**
+ * 有没有可用的端点：自定义配置看 Base URL，「使用思源设置中供应商」看有没有选供应商。
+ *
+ * 与 hasProviderConfig 分开是因为「获取模型列表」只要求端点，不要求模型名。
+ */
+export function hasProviderEndpoint(api: ApiSettings): boolean {
+    return api.protocol === PROTOCOL_SIYUAN_PROVIDER
+        ? api.siyuanProvider.trim() !== ""
+        : api.baseURL.trim() !== "";
+}
+
 /** 必填项是否齐全，用于在发请求前给出一致的提示。 */
 export function hasProviderConfig(api: ApiSettings): boolean {
-    return api.baseURL.trim() !== "" && api.model.trim() !== "";
+    return hasProviderEndpoint(api) && api.model.trim() !== "";
 }

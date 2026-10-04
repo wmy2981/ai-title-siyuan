@@ -16,8 +16,8 @@ import {
     REASONING_EFFORT_OFF,
     THINKING_CUSTOM,
     THINKING_DISABLED,
+    type AdapterProtocol,
     type ApiSettings,
-    type Protocol,
 } from "../config";
 
 /** 一次请求用的两条提示词。各协议把它们放在不同位置（messages / instructions / system）。 */
@@ -539,14 +539,15 @@ const anthropic: ProtocolAdapter = {
     parse: anthropicParse,
 };
 
-export function adapterFor(protocol: Protocol): ProtocolAdapter {
+export function adapterFor(protocol: AdapterProtocol): ProtocolAdapter {
     switch (protocol) {
         case PROTOCOL_RESPONSES:
             return responses;
         case PROTOCOL_ANTHROPIC_MESSAGES:
             return anthropic;
         default:
-            // mergeSettings 已把未知取值收敛掉了，这里只是让默认分支有意义
+            // 配置里的「使用思源设置中供应商」在 resolveApiSettings 里已经换成了供应商标明的协议，
+            // 走不到这里；留着默认分支只是为了覆盖 Chat Completions 这一种合法取值
             return chatCompletions;
     }
 }

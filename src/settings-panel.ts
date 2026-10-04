@@ -12,6 +12,7 @@
  */
 import {Dialog, Menu, showMessage} from "siyuan";
 import {listModels, testConnection} from "./api/client";
+import {activeModelName, providerModelNames, providerProtocol, readSiyuanProviders} from "./api/siyuan-provider";
 import {
     AUTO_APPLY_ALWAYS,
     AUTO_APPLY_NEVER,
@@ -19,7 +20,8 @@ import {
     AUTO_APPLY_SINGLE,
     DEFAULT_SETTINGS,
     hasProviderConfig,
-    isProtocol,
+    hasProviderEndpoint,
+    isAdapterProtocol,
     MEDIA_DROP,
     MEDIA_OPTIONS,
     MEDIA_PLACEHOLDER,
@@ -27,6 +29,7 @@ import {
     PROTOCOL_ANTHROPIC_MESSAGES,
     PROTOCOL_CHAT_COMPLETIONS,
     PROTOCOL_RESPONSES,
+    PROTOCOL_SIYUAN_PROVIDER,
     PROTOCOLS,
     REASONING_DEFAULT,
     REASONING_EFFORT_OFF,
@@ -51,24 +54,6 @@ import {setDebug} from "./debug";
 import type {T} from "./i18n";
 import {canEncrypt} from "./secret";
 
-interface ProviderModel {
-    id?: string;
-    name?: string;
-    displayName?: string;
-    enabled?: boolean;
-}
-
-interface SiyuanProvider {
-    id?: string;
-    displayName?: string;
-    baseURL?: string;
-    apiKey?: string;
-    protocol?: string;
-    /** 供应商自定义请求头，形如 {"x-opencode-session": "{{vars.SESSION}}"}。 */
-    headers?: Record<string, string>;
-    models?: ProviderModel[];
-}
-
 /**
  * 供应商是否靠自己配的请求头鉴权（与思源自己的判定一致：
  * app/src/config/tabs/ai/aiProviderHeaders.ts 的 hasProviderHeaderAuth）。
@@ -82,19 +67,6 @@ function hasHeaderAuth(headers: Record<string, string> | undefined): boolean {
 /** 请求头按 JSON 对象写进设置页的文本框；没有请求头时留空。 */
 function formatHeaders(headers: Record<string, string> | undefined): string {
     return headers && Object.keys(headers).length > 0 ? JSON.stringify(headers, null, 2) : "";
-}
-
-/**
- * 取供应商实际在用的模型名。
- *
- * 必须读 `name` 而不是 `id`：思源给每个模型也生成一个内部 id（形如 20260913135841-1u2j84c），
- * 那个字符串发到接口上是取不到模型的。
- * 一个供应商可以配多个模型，优先取启用中的那个。
- */
-function activeModelName(provider: SiyuanProvider): string {
-    const models = provider.models ?? [];
-    const active = models.find((model) => model.enabled) ?? models[0];
-    return active?.name ?? "";
 }
 
 /** 把配置写回本组各控件。导入会整体替换接口配置，届时需要重跑。 */
@@ -160,7 +132,7 @@ function rowItem(items: HTMLElement, title: string, description: string, field: 
 }
 
 /** 标题在上、控件占满整行。文本域和「下拉 + 附加输入」这类组合控件用这个。 */
-function stackItem(items: HTMLElement, title: string, description: string, field: HTMLElement): void {
+function stackItem(items: HTMLElement, title: string, description: string, field: HTMLElement): HTMLElement {
     const row = document.createElement("div");
     row.className = "b3-label config-item";
 
@@ -174,6 +146,7 @@ function stackItem(items: HTMLElement, title: string, description: string, field
     block.append(labelBlock(title, description), space, field);
     row.append(block);
     items.append(row);
+    return row;
 }
 
 function input(className = "b3-text-field"): HTMLInputElement {
@@ -427,6 +400,12 @@ function buildApiGroup(root: HTMLElement, t: T, settings: PluginSettings): Sync 
     const {api} = settings;
     const syncs: Sync[] = [];
 
+    /** 当前是不是「使用思源设置中供应商」模式（#27）。 */
+    const siyuanMode = (): boolean => api.protocol === PROTOCOL_SIYUAN_PROVIDER;
+
+    /** 配置不全时的提示：两种模式缺的东西不是一回事。 */
+    const missingConfigMessage = (): string => siyuanMode() ? t("testNoConfigProvider") : t("testNoConfig");
+
     const protocol = select();
     for (const value of PROTOCOLS) {
         const option = document.createElement("option");
@@ -436,51 +415,16 @@ function buildApiGroup(root: HTMLElement, t: T, settings: PluginSettings): Sync 
     }
     protocol.addEventListener("change", () => {
         api.protocol = protocol.value as typeof api.protocol;
+        // 模式换了：该显示的整行换一批，供应商下拉也要按思源当前的配置重建
+        refresh();
     });
     syncs.push(() => {
         protocol.value = api.protocol;
     });
     rowItem(items, t("protocol"), t("protocolDesc"), protocol);
 
-    const baseURL = input();
-    baseURL.placeholder = "https://api.openai.com/v1";
-    baseURL.addEventListener("input", () => {
-        api.baseURL = baseURL.value;
-    });
-    syncs.push(() => {
-        baseURL.value = api.baseURL;
-    });
-    rowItem(items, t("baseUrl"), t("baseUrlDesc"), baseURL);
-
-    const apiKey = input();
-    apiKey.type = "password";
-    apiKey.autocomplete = "off";
-    apiKey.addEventListener("input", () => {
-        api.apiKey = apiKey.value;
-    });
-    syncs.push(() => {
-        apiKey.value = api.apiKey;
-    });
-    // 拿不到思源数据仓库密钥时，这个 Key 只能明文落盘，必须当场说明（#26）：
-    // 换成密码框之后用户没有任何办法从界面上看出它到底有没有被加密
-    rowItem(items, t("apiKey"), canEncrypt() ? t("apiKeyDesc") : `${t("apiKeyDesc")} ${t("apiKeyDescInsecure")}`, apiKey);
-
-    // 与思源自己的供应商页面一样用一个 JSON 文本框：两边可以整段对拷，
-    // 而「自定义请求头」这种名字与取值都不固定的东西列成表单反而更难看
-    const customHeaders = textarea(3);
-    customHeaders.spellcheck = false;
-    customHeaders.placeholder = t("customHeadersPlaceholder");
-    customHeaders.addEventListener("input", () => {
-        api.customHeaders = customHeaders.value;
-    });
-    syncs.push(() => {
-        customHeaders.value = api.customHeaders;
-    });
-    stackItem(items, t("customHeaders"), t("customHeadersDesc"), customHeaders);
-
-    // 已拉取到的模型名，供输入框的下拉使用；为空表示还没拉过
+    // 模型输入框先建出来：供应商下拉要往里填默认模型，而它那一行要排在自定义请求头之后
     let availableModels: string[] = [];
-
     const modelInput = input();
     modelInput.placeholder = t("modelPlaceholder");
     const pickModel = (id: string) => {
@@ -500,12 +444,70 @@ function buildApiGroup(root: HTMLElement, t: T, settings: PluginSettings): Sync 
         modelInput.value = api.model;
     });
 
+    // 「使用思源设置中供应商」下唯一要在这里选的东西：插件只存这个 id，
+    // 地址、密钥与请求头每次请求前从思源现取（#27）
+    const provider = select();
+    provider.addEventListener("change", () => {
+        api.siyuanProvider = provider.value;
+        const chosen = readSiyuanProviders().find((item) => item.id === provider.value);
+        if (!chosen) {
+            return;
+        }
+        // 模型名只属于某个供应商：换了供应商还留着上一个的名字，请求必然 404
+        api.model = activeModelName(chosen);
+        modelInput.value = api.model;
+        availableModels = providerModelNames(chosen);
+    });
+    const providerRow = rowItem(items, t("provider"), t("providerDesc"), provider);
+
+    const baseURL = input();
+    baseURL.placeholder = "https://api.openai.com/v1";
+    baseURL.addEventListener("input", () => {
+        api.baseURL = baseURL.value;
+    });
+    syncs.push(() => {
+        baseURL.value = api.baseURL;
+    });
+    const baseURLRow = rowItem(items, t("baseUrl"), t("baseUrlDesc"), baseURL);
+
+    const apiKey = input();
+    apiKey.type = "password";
+    apiKey.autocomplete = "off";
+    apiKey.addEventListener("input", () => {
+        api.apiKey = apiKey.value;
+    });
+    syncs.push(() => {
+        apiKey.value = api.apiKey;
+    });
+    // 拿不到思源数据仓库密钥时，这个 Key 只能明文落盘，必须当场说明（#26）：
+    // 换成密码框之后用户没有任何办法从界面上看出它到底有没有被加密
+    const apiKeyRow = rowItem(
+        items,
+        t("apiKey"),
+        canEncrypt() ? t("apiKeyDesc") : `${t("apiKeyDesc")} ${t("apiKeyDescInsecure")}`,
+        apiKey,
+    );
+
+    // 与思源自己的供应商页面一样用一个 JSON 文本框：两边可以整段对拷，
+    // 而「自定义请求头」这种名字与取值都不固定的东西列成表单反而更难看
+    const customHeaders = textarea(3);
+    customHeaders.spellcheck = false;
+    customHeaders.placeholder = t("customHeadersPlaceholder");
+    customHeaders.addEventListener("input", () => {
+        api.customHeaders = customHeaders.value;
+    });
+    syncs.push(() => {
+        customHeaders.value = api.customHeaders;
+    });
+    const customHeadersRow = stackItem(items, t("customHeaders"), t("customHeadersDesc"), customHeaders);
+
     const fetchButton = document.createElement("button");
     fetchButton.className = "b3-button b3-button--outline fn__flex-shrink";
     fetchButton.textContent = t("fetchModels");
     fetchButton.addEventListener("click", async () => {
-        if (api.baseURL.trim() === "") {
-            showMessage(t("testNoConfig"), 6000, "error");
+        // 只要求端点：模型名是这次要拉的东西，不能反过来要求它已经填好
+        if (!hasProviderEndpoint(api)) {
+            showMessage(missingConfigMessage(), 6000, "error");
             return;
         }
         fetchButton.disabled = true;
@@ -534,7 +536,7 @@ function buildApiGroup(root: HTMLElement, t: T, settings: PluginSettings): Sync 
     testButton.textContent = t("testConnection");
     testButton.addEventListener("click", async () => {
         if (!hasProviderConfig(api)) {
-            showMessage(t("testNoConfig"), 6000, "error");
+            showMessage(missingConfigMessage(), 6000, "error");
             return;
         }
         testButton.disabled = true;
@@ -565,7 +567,32 @@ function buildApiGroup(root: HTMLElement, t: T, settings: PluginSettings): Sync 
     importButton.addEventListener("click", () => {
         openImportDialog(t, settings, () => syncs.forEach((sync) => sync()));
     });
-    rowItem(items, t("importFromSiyuan"), t("importFromSiyuanDesc"), importButton);
+    const importRow = rowItem(items, t("importFromSiyuan"), t("importFromSiyuanDesc"), importButton);
+
+    /**
+     * 模式切换后重刷可见性，并重建供应商下拉。
+     *
+     * 「使用思源设置中供应商」下 Base URL、API Key、自定义请求头与「从思源设置获取」
+     * 都由思源那边接管了：在这里填只会让人以为生效了，导入更是会当场把模式切成自定义，
+     * 所以整行隐藏；供应商下拉反过来只在该模式下出现。
+     */
+    function refresh(): void {
+        fillProviderOptions(provider, api.siyuanProvider, t);
+        const siyuan = siyuanMode();
+        baseURLRow.classList.toggle("fn__none", siyuan);
+        apiKeyRow.classList.toggle("fn__none", siyuan);
+        customHeadersRow.classList.toggle("fn__none", siyuan);
+        importRow.classList.toggle("fn__none", siyuan);
+        providerRow.classList.toggle("fn__none", !siyuan);
+        if (siyuan) {
+            // 模型清单直接取思源里配好的那份：这个模式下模型本来就属于某个供应商
+            const chosen = readSiyuanProviders().find((item) => item.id === api.siyuanProvider);
+            availableModels = chosen ? providerModelNames(chosen) : [];
+        } else {
+            availableModels = [];
+        }
+    }
+    syncs.push(refresh);
 
     // 旧版这里是「从一串 JSON 片段里挑一条」的下拉，已撤出界面并弃用：
     // 其中 {"extra_body": ...} 在原始 HTTP 下永远不生效（extra_body 只是 Python SDK 的
@@ -634,18 +661,11 @@ function buildApiGroup(root: HTMLElement, t: T, settings: PluginSettings): Sync 
     return () => syncs.forEach((sync) => sync());
 }
 
-/**
- * 供应商实际使用的协议。
- * 思源自己的默认值是 "openai"（aiProviderUi.ts 的 `draft.protocol ||= "openai"`），
- * 字段缺失时按同一个默认值处理，否则会把没配过的供应商判成「协议不支持」。
- */
-function providerProtocol(provider: SiyuanProvider): string {
-    return (provider.protocol ?? "").trim() || PROTOCOL_CHAT_COMPLETIONS;
-}
-
 /** 协议标识 -> 展示名。认不出来的原样显示，至少让用户看到思源里存的是什么。 */
 function protocolName(protocol: string, t: T): string {
     switch (protocol) {
+        case PROTOCOL_SIYUAN_PROVIDER:
+            return t("protocolSiyuanProvider");
         case PROTOCOL_CHAT_COMPLETIONS:
             return t("protocolChatCompletions");
         case PROTOCOL_RESPONSES:
@@ -655,6 +675,41 @@ function protocolName(protocol: string, t: T): string {
         default:
             return protocol;
     }
+}
+
+/**
+ * 重建供应商下拉的选项。
+ *
+ * 每次重刷都整体重建：思源那边刚加了或删了供应商时，面板里留着上一次的列表，
+ * 只会让人选到一个已经不存在的 id。
+ */
+function fillProviderOptions(node: HTMLSelectElement, selected: string, t: T): void {
+    node.textContent = "";
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = t("providerPlaceholder");
+    node.append(placeholder);
+
+    const providers = readSiyuanProviders();
+    for (const provider of providers) {
+        const id = provider.id ?? "";
+        if (id === "") {
+            continue;
+        }
+        const option = document.createElement("option");
+        option.value = id;
+        option.textContent = provider.displayName || id;
+        node.append(option);
+    }
+    // 思源那边删掉的供应商原样留在下拉里：否则界面显示成没选，配置里却还留着旧 id，
+    // 报错时用户看到的名字在界面上根本找不到
+    if (selected !== "" && !providers.some((provider) => provider.id === selected)) {
+        const missing = document.createElement("option");
+        missing.value = selected;
+        missing.textContent = selected;
+        node.append(missing);
+    }
+    node.value = selected;
 }
 
 /** 从思源自身的 AI 供应商配置里一次性复制 Base URL / API Key / 请求头 / 模型。 */
@@ -682,7 +737,7 @@ function openImportDialog(t: T, settings: PluginSettings, onImported: () => void
         const protocol = providerProtocol(provider);
         // 只接受插件实现了的协议：请求地址与请求体结构都按协议选，
         // 协议对不上时请求必然失败，不如在这里就把按钮禁掉
-        const target = isProtocol(protocol) ? protocol : undefined;
+        const target = isAdapterProtocol(protocol) ? protocol : undefined;
 
         const item = document.createElement("div");
         item.className = "ai-title__import-item";
@@ -730,16 +785,6 @@ function openImportDialog(t: T, settings: PluginSettings, onImported: () => void
         item.append(text, choose);
         body.append(item);
     }
-}
-
-/**
- * 读思源自己的 AI 配置。
- * 桌面端管理员角色下 apiKey 是明文；非管理员时内核会把 AI 配置整体清空，
- * 这时列表为空，界面给出「没有已配置的供应商」提示。
- */
-function readSiyuanProviders(): SiyuanProvider[] {
-    const config = (window as unknown as {siyuan?: {config?: {ai?: {providers?: SiyuanProvider[]}}}}).siyuan?.config;
-    return config?.ai?.providers ?? [];
 }
 
 function buildBehaviorGroup(root: HTMLElement, t: T, settings: PluginSettings): Sync {
