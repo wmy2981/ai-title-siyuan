@@ -40,7 +40,9 @@ function siyuanApi(overrides: Partial<ApiSettings> = {}): ApiSettings {
         ...DEFAULT_SETTINGS.api,
         protocol: PROTOCOL_SIYUAN_PROVIDER,
         siyuanProvider: PROVIDER.id,
-        model: "",
+        // 自定义模式的模型名留着不动：这个模式下用的必须是 siyuanModel（#27）
+        model: "gpt-4o-mini",
+        siyuanModel: "",
         ...overrides,
     };
 }
@@ -74,9 +76,11 @@ describe("resolveApiSettings（#27 使用思源设置中供应商）", () => {
         expect(resolved.model).toBe("gpt-5.2");
     });
 
-    it("已经选过模型时以插件里的为准", () => {
+    it("已经选过模型时以插件里的为准，且用的是 siyuanModel 而不是自定义模式的 model", () => {
         setProviders([PROVIDER]);
-        expect(resolveApiSettings(siyuanApi({model: "gpt-5.1"})).model).toBe("gpt-5.1");
+        expect(resolveApiSettings(siyuanApi({siyuanModel: "gpt-5.1"})).model).toBe("gpt-5.1");
+        // 自定义模式那个字段在这个模式下不参与：它是另一套配置的模型名
+        expect(resolveApiSettings(siyuanApi({model: "should-not-be-used"})).model).toBe("gpt-5.2");
     });
 
     it("供应商没配请求头时按「没有自定义请求头」处理", () => {

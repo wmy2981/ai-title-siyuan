@@ -13,7 +13,7 @@
   "protocolDesc": "按供应商实际提供的接口选择，导入思源配置时会跟着供应商的协议走",
 
   "provider": "供应商",
-  "providerDesc": "协议、Base URL、API Key 与请求头都按思源「设置 → AI → 供应商」里选中的那条来：插件只记下它的 id，不保存这些值的副本，思源那边改了就跟着变。列表为空时先去思源设置里添加供应商；本页其余参数（温度、思考强度等）仍然生效",
+  "providerDesc": "协议、地址、密钥与请求头都取自思源里选中的这条供应商；供应商与模型名每台设备各选一次。列表为空时先去思源设置里添加",
   "providerPlaceholder": "请选择供应商",
 
   "baseUrl": "Base URL",
@@ -21,8 +21,8 @@
 
   "apiKey": "API Key",
   "apiKeyDesc": "Chat Completions 与 Responses 以 Authorization: Bearer 发送，Messages 以 x-api-key 发送；接口无需密钥时留空",
-  "apiKeyDescInsecure": "未检测到思源数据仓库密钥，API Key 会以明文保存在插件数据目录里。在思源「设置 → 数据仓库密钥」里初始化之后即可改为加密保存",
-  "apiKeyUnreadable": "已保存的 API Key 无法解密（数据仓库密钥已变更），已清空，请在插件设置里重新填写",
+  "apiKeyDescInsecure": "未检测到思源数据仓库密钥，API Key 将以明文保存；在思源「设置 → 数据仓库密钥」里初始化后即可加密保存",
+  "apiKeyUnreadable": "已保存的 API Key 无法解密（数据仓库密钥已变更），已清空，请重新填写",
 
   "customHeaders": "自定义请求头",
   "customHeadersDesc": "填一个 JSON 对象，如 {\"x-opencode-session\": \"{{vars.SESSION}}\"}。取值里可用 {{vars.名字}} 引用变量、{{secrets.名字}} 引用密钥，每次请求前替换，其中密钥只在其「允许主机」包含 Base URL 的域名时才替换。这里写了的请求头会覆盖插件自己发出的同名头",

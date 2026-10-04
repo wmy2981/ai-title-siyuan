@@ -7,17 +7,20 @@
 import {getActiveEditor, Plugin, showMessage, hideMessage} from "siyuan";
 import type {ICommandContext, IMenu, IProtyle, TEventBus} from "siyuan";
 import {parseCustomHeaders} from "./api/headers";
+import {findSiyuanProvider} from "./api/siyuan-provider";
 import {applyGeneratedSilently, openGenerateDialog, type NoteInfo} from "./dialog";
 import {
     DEFAULT_SETTINGS,
     defaultTitleLanguage,
     hasProviderConfig,
     mergeSettings,
+    PROTOCOL_SIYUAN_PROVIDER,
     STORAGE_NAME,
     type PluginSettings,
 } from "./config";
 import {getDocTitle} from "./content";
 import {debug, debugJson, setDebug} from "./debug";
+import {loadProviderSelection, saveProviderSelection, withoutProviderSelection} from "./device-store";
 import {makeT, type T} from "./i18n";
 import {generateTitles, type GenerateOutcome, type NoteResult} from "./pipeline";
 import {sealSettings, unsealSettings} from "./secret";
@@ -99,16 +102,23 @@ export default class AiTitlePlugin extends Plugin {
     }
 
     /**
-     * 落盘。API Key 是在这一步才换成密文的：内存与设置页里始终是明文，
-     * 数据目录里只有密文（取不到思源数据仓库密钥时才退回明文，见 secret.ts）。
+     * 落盘。两件事在这里发生：
+     * 1. API Key 换成密文（取不到思源数据仓库密钥时才退回明文，见 secret.ts）；
+     * 2. 「使用思源设置中供应商」的供应商 id 与模型名改存本设备的 local storage，
+     *    petal 那份（参与同步）里不写它们，免得同步到别的设备指向一个不存在的供应商（#27）。
      */
     private async persist(settings: PluginSettings): Promise<void> {
-        await this.saveData(STORAGE_NAME, await sealSettings(settings));
+        await saveProviderSelection({
+            provider: settings.api.siyuanProvider,
+            model: settings.api.siyuanModel,
+        });
+        await this.saveData(STORAGE_NAME, await sealSettings(withoutProviderSelection(settings)));
     }
 
     private async loadSettings(): Promise<void> {
         const stored = await this.loadData(STORAGE_NAME);
-        const {settings, needsWrite, unreadable} = await unsealSettings(mergeSettings(stored));
+        const merged = mergeSettings(stored);
+        const {settings, needsWrite, unreadable} = await unsealSettings(merged);
         this.settings = settings;
         setDebug(this.settings.ui.debug);
 
@@ -121,6 +131,8 @@ export default class AiTitlePlugin extends Plugin {
                 (window as unknown as {siyuan?: {config?: {lang?: string}}}).siyuan?.config?.lang ?? "en",
             );
         }
+
+        await this.applyDeviceSelection(merged);
 
         // 解不开时按「清空 Key」处理，并且必须说一声：Key 无声消失只会让人以为插件坏了。
         // 用 info 而不是 error —— 这不是故障，是数据仓库密钥换了之后必然的结果。
@@ -136,6 +148,38 @@ export default class AiTitlePlugin extends Plugin {
 
         debug(`Settings loaded (debug mode on)`);
         debugJson("Settings loaded", this.redactedSettings(this.settings));
+    }
+
+    /**
+     * 供应商与模型名只在本设备成立，取本设备存下的那一份（#27）。
+     *
+     * 思源自己的 AI 供应商配置不参与同步，同一个供应商 id 在别的设备上并不存在，
+     * 所以这两项不能跟着插件数据走。1.1.0 把它们写进了 petal：只有在本设备确实存在
+     * 那个供应商时才接手成本设备的选择，否则丢掉 —— 留着它只会让设置页显示一个
+     * 发请求必然失败的供应商。
+     *
+     * 无论当前是哪个模式都读：用户随时可能在设置页里切到该模式。
+     */
+    private async applyDeviceSelection(merged: PluginSettings): Promise<void> {
+        const selection = await loadProviderSelection();
+        if (selection) {
+            this.settings.api.siyuanProvider = selection.provider;
+            this.settings.api.siyuanModel = selection.model;
+            return;
+        }
+        const legacyProvider = merged.api.siyuanProvider;
+        if (merged.api.protocol === PROTOCOL_SIYUAN_PROVIDER && legacyProvider !== "" &&
+            findSiyuanProvider(legacyProvider)) {
+            debug(`Adopting the synced provider selection "${legacyProvider}" on this device`);
+            this.settings.api.siyuanProvider = legacyProvider;
+            this.settings.api.siyuanModel = merged.api.model;
+            // 顺手回写一次：把这两项从同步用的那份数据里挪到本设备，落盘路径见 persist
+            await this.persist(this.settings);
+            return;
+        }
+        // 本设备没选过，落盘里的旧值在本设备也不存在：两项都清掉，让用户重新选
+        this.settings.api.siyuanProvider = "";
+        this.settings.api.siyuanModel = "";
     }
 
     /** 三个界面开关的当前状态同步到实际注册的入口上。 */

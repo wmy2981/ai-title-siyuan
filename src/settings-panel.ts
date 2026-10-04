@@ -34,6 +34,7 @@ import {
     REASONING_DEFAULT,
     REASONING_EFFORT_OFF,
     REASONING_OPTIONS,
+    selectedModel,
     TOC_ALWAYS,
     TOC_NEVER,
     TOC_OPTIONS,
@@ -427,21 +428,27 @@ function buildApiGroup(root: HTMLElement, t: T, settings: PluginSettings): Sync 
     let availableModels: string[] = [];
     const modelInput = input();
     modelInput.placeholder = t("modelPlaceholder");
-    const pickModel = (id: string) => {
-        api.model = id;
+    // 两种模式各有一个模型名字段：模型名只属于某一个供应商，共用一个字段会让切换模式时
+    // 把一边的模型名带到另一边（见 config.ts 的 siyuanModel）
+    const setModel = (id: string) => {
+        if (siyuanMode()) {
+            api.siyuanModel = id;
+        } else {
+            api.model = id;
+        }
         modelInput.value = id;
     };
     modelInput.addEventListener("input", () => {
-        api.model = modelInput.value;
+        setModel(modelInput.value);
     });
     // 点输入框即可从已拉取的列表里挑；模型名本身仍允许直接手打
     modelInput.addEventListener("click", () => {
         if (availableModels.length > 0) {
-            openModelMenu(modelInput, availableModels, t, pickModel);
+            openModelMenu(modelInput, availableModels, t, setModel);
         }
     });
     syncs.push(() => {
-        modelInput.value = api.model;
+        modelInput.value = selectedModel(api);
     });
 
     // 「使用思源设置中供应商」下唯一要在这里选的东西：插件只存这个 id，
@@ -454,8 +461,7 @@ function buildApiGroup(root: HTMLElement, t: T, settings: PluginSettings): Sync 
             return;
         }
         // 模型名只属于某个供应商：换了供应商还留着上一个的名字，请求必然 404
-        api.model = activeModelName(chosen);
-        modelInput.value = api.model;
+        setModel(activeModelName(chosen));
         availableModels = providerModelNames(chosen);
     });
     const providerRow = rowItem(items, t("provider"), t("providerDesc"), provider);
@@ -520,7 +526,7 @@ function buildApiGroup(root: HTMLElement, t: T, settings: PluginSettings): Sync 
             }
             availableModels = models;
             // 拉完直接摊开，省得再点一次输入框
-            openModelMenu(modelInput, availableModels, t, pickModel);
+            openModelMenu(modelInput, availableModels, t, setModel);
         } catch (error) {
             showMessage(t("testFailed", {message: error instanceof Error ? error.message : String(error)}), 12000, "error");
         } finally {
@@ -584,6 +590,8 @@ function buildApiGroup(root: HTMLElement, t: T, settings: PluginSettings): Sync 
         customHeadersRow.classList.toggle("fn__none", siyuan);
         importRow.classList.toggle("fn__none", siyuan);
         providerRow.classList.toggle("fn__none", !siyuan);
+        // 模型名跟着模式换：两种模式各存各的，切换时输入框要显示对应那一个
+        modelInput.value = selectedModel(api);
         if (siyuan) {
             // 模型清单直接取思源里配好的那份：这个模式下模型本来就属于某个供应商
             const chosen = readSiyuanProviders().find((item) => item.id === api.siyuanProvider);

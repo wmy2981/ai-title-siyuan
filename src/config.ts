@@ -154,8 +154,20 @@ export interface ApiSettings {
     /**
      * 选中的思源供应商 id，只在 protocol 为「使用思源设置中供应商」时有意义（#27）。
      * 存 id 而不存它的地址与密钥：那些值每次请求前现读，思源那边改了就跟着变。
+     *
+     * **这一项与 siyuanModel 只在本设备成立，不参与数据同步**（见 device-store.ts）：
+     * 思源自己的 AI 供应商配置不在同步范围内，供应商 id 同步到别的设备只会指向一个
+     * 不存在的供应商，请求必然失败。
      */
     siyuanProvider: string;
+    /**
+     * 「使用思源设置中供应商」模式下选中的模型名（#27）。
+     *
+     * 与 model 分开而不是共用一个字段：模型名只属于某一个供应商，两种模式的模型名
+     * 互不相干 —— 共用的话，在设置页里切换模式就会把一边的模型名带到另一边。
+     * 与 siyuanProvider 一样，这一项只在本设备成立，不参与同步。
+     */
+    siyuanModel: string;
     baseURL: string;
     apiKey: string;
     /**
@@ -293,6 +305,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
         // 协议字段从 v0.1.0 起就一直存在，每个存过的配置里都带着自己的取值。
         protocol: PROTOCOL_SIYUAN_PROVIDER,
         siyuanProvider: "",
+        siyuanModel: "",
         baseURL: "",
         apiKey: "",
         apiKeyEncrypted: "",
@@ -358,10 +371,13 @@ export function mergeSettings(stored: unknown): PluginSettings {
     if (!isProtocol(api.protocol)) {
         api.protocol = PROTOCOL_CHAT_COMPLETIONS;
     }
-    // 供应商 id 只在「使用思源设置中供应商」下有意义，但类型被手改坏时同样收敛成空串，
-    // 否则后续的 trim 会炸成看不懂的报错。
+    // 供应商 id 与它的模型名只在「使用思源设置中供应商」下有意义，但类型被手改坏时同样
+    // 收敛成空串，否则后续的 trim 会炸成看不懂的报错。
     if (typeof api.siyuanProvider !== "string") {
         api.siyuanProvider = DEFAULT_SETTINGS.api.siyuanProvider;
+    }
+    if (typeof api.siyuanModel !== "string") {
+        api.siyuanModel = DEFAULT_SETTINGS.api.siyuanModel;
     }
     // 请求头是 JSON 对象文本，真被手改成对象或数组时按「没有自定义请求头」处理：
     // 留着它只会在第一次解析时炸成 `text.trim is not a function` 这种看不懂的报错。
@@ -411,7 +427,12 @@ export function hasProviderEndpoint(api: ApiSettings): boolean {
         : api.baseURL.trim() !== "";
 }
 
+/** 当前模式实际用的模型名：两种模式各有一个字段，见 ApiSettings 的 siyuanModel。 */
+export function selectedModel(api: ApiSettings): string {
+    return api.protocol === PROTOCOL_SIYUAN_PROVIDER ? api.siyuanModel : api.model;
+}
+
 /** 必填项是否齐全，用于在发请求前给出一致的提示。 */
 export function hasProviderConfig(api: ApiSettings): boolean {
-    return hasProviderEndpoint(api) && api.model.trim() !== "";
+    return hasProviderEndpoint(api) && selectedModel(api).trim() !== "";
 }

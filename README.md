@@ -20,10 +20,10 @@ This plugin does the naming pass for you. It reads each note's content, asks a m
 - **Review before writing.** Every title stays editable. Untick what you don't want, edit any field, or regenerate a single row.
 - **Your style, not the contract.** The system and user prompts are fixed because they carry the JSON contract the plugin parses. Put your own requirements in the `{{system}}` and `{{user}}` append slots; `{{content}}`, `{{language}}` and `{{style}}` are filled in per request.
 - **Three protocols.** Chat Completions, the Responses API and Anthropic Messages. Point it at any compatible endpoint, or import a provider you already configured in SiYuan — the protocol comes along with it.
-- **Use a provider configured in SiYuan directly.** This is what a fresh install starts on: the plugin stores only the provider's id, and reads the protocol, base URL, API key and headers from SiYuan before every request — no copy in the plugin data directory, and edits made in SiYuan apply immediately.
+- **Use a provider configured in SiYuan directly.** What a fresh install starts on: the protocol, address, key and headers all come from SiYuan, and the plugin remembers only the provider and model name (picked once per device). Edits made in SiYuan apply immediately.
 - **Set the thinking effort.** Pick a level from disabled up to maximum — it travels as `reasoning_effort`, `reasoning.effort` or Anthropic `thinking` depending on the protocol — or send nothing and leave it to the provider.
 - **Custom request headers.** Fill in a JSON object of extra headers whose values may reference SiYuan variables (`{{vars.NAME}}`) and secrets (`{{secrets.NAME}}`), resolved before every request — which is what providers such as opencode need. Importing a provider from SiYuan brings its headers along.
-- **The API key is encrypted at rest.** It is sealed with AES-256-GCM under SiYuan's own data repo key, so the plaintext only ever lives in memory. Without a data repo key the plugin falls back to plain text and says so in the settings panel.
+- **The API key is encrypted at rest.** It is sealed with SiYuan's own data repo key. Without one it is stored in plain text and the settings panel says so.
 - **Built for debugging.** Debug mode dumps the full request and response to the console.
 
 ## Requirements
@@ -51,10 +51,10 @@ That writes `package.zip` in the repository root.
 
 Open **Settings → Marketplace → Downloaded → AI Title → Settings**.
 
-1. **Protocol** — defaults to **Use a SiYuan provider**: the protocol, base URL, API key and headers all come from the provider selected under SiYuan Settings → AI → Providers, and the plugin stores only that provider's id. Switch this dropdown to Chat Completions, the Responses API or Anthropic Messages to fill those values in yourself.
-2. **Provider** — shown only while **Use a SiYuan provider** is selected. Pick one of the providers already configured in SiYuan; an empty list means there are none yet, so add one under **Settings → AI → Providers**.
-3. **Base URL** — with a custom protocol, include the version segment your provider documents. For Messages, use the provider's Messages base (`https://api.anthropic.com/v1`, or `https://api.deepseek.com/anthropic`); the plugin appends `/v1` and `/messages` only when they are missing.
-4. **API Key** — sent as `Authorization: Bearer <key>` on Chat Completions and Responses, as `x-api-key` on Messages. Leave empty if your endpoint needs no key. It is encrypted with SiYuan's data repo key before being written to disk; see below.
+1. **Protocol** — defaults to **Use a SiYuan provider**: the protocol, base URL, API key and headers all come from the provider selected in SiYuan. Switch the dropdown to one of the three concrete protocols to fill those values in yourself.
+2. **Provider** — shown only while **Use a SiYuan provider** is selected. Pick one of the providers already configured in SiYuan; an empty list means there are none yet. This choice and the model name are picked once per device.
+3. **Base URL** — with a custom protocol, include the version segment your provider documents. For Messages, stop at `/v1` — the plugin appends `/messages` itself.
+4. **API Key** — leave empty if your endpoint needs no key. It is encrypted with SiYuan's data repo key before being written to disk; see below.
 5. **Model** — type a name, click **Fetch models** to pick from the provider's list, or use **Import from SiYuan** to copy a provider you already configured there. With a SiYuan provider selected, clicking the field lists the models that provider registers.
 6. Click **Test connection**. Any reply means the configuration works.
 
@@ -62,8 +62,8 @@ Open **Settings → Marketplace → Downloaded → AI Title → Settings**.
 
 | Group | Setting | Default | Notes |
 | --- | --- | --- | --- |
-| API | Protocol | Use a SiYuan provider | The default: protocol, base URL, API key and headers come from the provider selected in SiYuan. Switch to Chat Completions, the Responses API or Anthropic Messages to fill the fields below in yourself. |
-| API | Provider | *empty* | Shown only while the protocol is **Use a SiYuan provider**. Pick one of the providers configured in SiYuan; the plugin stores its id alone, and changing the provider also switches the model to the one that provider has enabled. |
+| API | Protocol | Use a SiYuan provider | Protocol, base URL, API key and headers come from the provider selected in SiYuan. Switch to one of the three concrete protocols to fill the fields below in yourself. |
+| API | Provider | *empty* | Shown only while the protocol is **Use a SiYuan provider**. Pick one of the providers configured in SiYuan; changing it also switches the model to the one that provider has enabled. The provider and model are picked once per device. |
 | API | Thinking effort | Default | Sent as `reasoning_effort` on Chat Completions, `reasoning.effort` on Responses, and mapped to `thinking` on Messages. **Default** sends nothing and leaves it to the provider; **Disabled** asks the model not to reason. Strict endpoints reject the parameter with a 400. |
 | API | Temperature | `1.0` | `0`–`2`. Lower is more deterministic. Messages accepts `0`–`1` only, and drops the field when thinking is on. |
 | API | Top P | `0.8` | Leave empty to omit from the request. Messages drops it when thinking is on. |
@@ -93,14 +93,13 @@ Open **Settings → Marketplace → Downloaded → AI Title → Settings**.
 
 ### Using a provider from SiYuan
 
-A fresh install starts here: you already configured the protocol, base URL, API key and headers of a provider under SiYuan **Settings → AI → Providers**, so the plugin uses that configuration instead of asking you to copy it.
+A fresh install starts here: SiYuan **Settings → AI → Providers** already holds the protocol, address, key and headers, so the plugin uses that configuration instead of asking you to copy it.
 
-- The plugin stores the provider's **id** and the model name only. Protocol, base URL, API key and headers are read from SiYuan **before every request**, so changing the address or the key there takes effect immediately and no second copy is left in the plugin data directory.
-- The provider's own headers are used as well, and `{{vars.NAME}}` / `{{secrets.NAME}}` inside them are resolved by exactly the same rules as the plugin's custom headers, including a secret's allowed-hosts list.
-- **The model name still belongs to the plugin.** Pick one of the models the provider registers — clicking the model field lists them — or type a name. Changing the provider switches the model to the one that provider has enabled, because a model name belongs to a single provider and keeping the previous one would guarantee a 404.
-- **Temperature, thinking effort, max output tokens and the rest stay in this plugin**, whichever protocol is selected.
-- Delete that provider in SiYuan and the plugin reports its id and asks you to pick another one instead of sending an unauthenticated request. Non-administrator roles such as publish visitors cannot read SiYuan's AI configuration, so the mode is unavailable to them.
-- While this mode is active, **Base URL**, **API Key**, **Custom headers** and **Import from SiYuan** are hidden: SiYuan owns those values, and filling them in here would only look like it worked. To freeze one configuration as the plugin's own copy, switch **Protocol** to one of the three concrete protocols and use **Import from SiYuan** once.
+- The plugin only remembers the selected provider and model name; protocol, address, key and headers are read from SiYuan before every request, so edits made there apply immediately.
+- **Pick the provider and model once per device.** SiYuan does not sync its own AI configuration, so a provider synced from another device does not exist here.
+- The provider's own headers are used as well, and `{{vars.NAME}}` / `{{secrets.NAME}}` inside them follow the same rules as the plugin's custom headers.
+- Temperature, thinking effort, max output tokens and the rest stay in this plugin.
+- While this mode is active, **Base URL**, **API Key**, **Custom headers** and **Import from SiYuan** are hidden because SiYuan owns those values. To freeze one configuration as the plugin's own copy, switch **Protocol** to one of the three concrete protocols and use **Import from SiYuan** once.
 
 ### Custom headers
 
@@ -124,12 +123,12 @@ Some providers insist on headers of their own. opencode, for one, wants a stable
 
 **The API key is encrypted with SiYuan's own data repo key before it reaches the plugin's data directory.**
 
-- The key material is the 32-byte random key from **Settings → Data repo key** (`window.siyuan.config.repo.key`, returned as-is to an administrator). The plugin encrypts with AES-256-GCM through WebCrypto in the renderer and stores the ciphertext as `v1:<iv>:<ciphertext>` in the `apiKeyEncrypted` field of `data/storage/petal/ai-title-siyuan/settings.json`. The plaintext exists only in memory and in the settings panel, never on disk.
-- **With no data repo key there is nothing to encrypt with.** SiYuan never generates one on its own — it exists only after you initialize or import it under **Settings → Data repo key**, or enable cloud sync. The plugin then falls back to plain text and says so in the **API Key** row instead of pretending the key is protected.
-- **Resetting or replacing the data repo key makes old ciphertext undecryptable.** Rather than failing with an error the user cannot act on, the plugin clears the stored key, tells you once, and you enter it again.
-- Opening SiYuan in a browser through `http://<lan-ip>:6806` is not a secure context, so the browser exposes no WebCrypto: the plugin can neither decrypt nor encrypt there. The ciphertext is **left untouched** (the desktop client or `127.0.0.1` still reads it), but you have to enter the key once more in that session, and what gets written then is plain text.
-- A plain-text API key stored by an older version is migrated to ciphertext when the plugin loads; there is nothing to do by hand.
-- **Custom headers are not encrypted.** They are a text field you may rewrite at any time; if you need a credential in there, reference SiYuan's secret store as `{{secrets.NAME}}` so the key itself lives in exactly one place.
+- The key material comes from **Settings → Data repo key**; the plugin encrypts locally with AES-256-GCM and never writes the plain text to disk.
+- **With no data repo key there is nothing to encrypt with** (SiYuan never generates one on its own), so the key is stored in plain text and the **API Key** row says so.
+- **Resetting or replacing the data repo key makes old ciphertext undecryptable**: the plugin clears the stored key and tells you once, and you enter it again.
+- Opening SiYuan in a browser through `http://<lan-ip>:6806` leaves no encryption available: the ciphertext is kept as it is, but you have to enter the key once more there and it is written in plain text.
+- A plain-text key stored by an older version is turned into ciphertext when the plugin loads; there is nothing to do by hand.
+- **Custom headers are not encrypted**; if you need a credential in there, reference SiYuan's secret store as `{{secrets.NAME}}`.
 
 ### Applying titles
 
@@ -175,8 +174,8 @@ Four entry points, all doing the same thing:
 - **A note the model does not return a title for is reported as a failure.** The plugin never guesses a mapping or falls back to a positional match, because that would write a title onto an unrelated note.
 - **`reasoning_content` is read as a fallback** when `content` comes back empty, since some models put the entire answer there.
 - **The publish service is not supported.** Publish visitors carry a read-only role, and the kernel endpoint the plugin uses requires an administrator role. `disabledInPublish` is set accordingly.
-- **Encrypting the API key depends on SiYuan's data repo key.** Without one the key sits in plain text in the plugin data directory; the settings panel says so, and initializing the data repo key switches it to encrypted storage automatically.
-- **Using a SiYuan provider stores neither its address nor its key.** The plugin keeps the provider id and the model name only and reads the rest per request; the trade-off is that deleting that provider in SiYuan makes the plugin ask you to pick another one.
+- **Encrypting the API key depends on SiYuan's data repo key.** Without one it is stored in plain text, the settings panel says so, and initializing the key switches it to encrypted storage automatically.
+- **Using a SiYuan provider stores neither its address nor its key.** The plugin remembers the provider and model name only and reads the rest per request; those two are picked once per device, so deleting that provider in SiYuan — or moving to another device — asks you to pick one again.
 
 ## Troubleshooting
 

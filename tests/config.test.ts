@@ -13,6 +13,7 @@ import {
     PROTOCOLS,
     REASONING_DEFAULT,
     REASONING_EFFORT_OFF,
+    selectedModel,
     type ApiSettings,
 } from "../src/config";
 
@@ -124,19 +125,36 @@ describe("hasProviderConfig（#27 两种模式要填的东西不同）", () => {
         expect(hasProviderEndpoint({...api, baseURL: ""})).toBe(false);
     });
 
-    it("思源供应商模式看供应商和模型，不看 Base URL", () => {
+    it("思源供应商模式看供应商和 siyuanModel，不看 Base URL", () => {
         const api: ApiSettings = {
             ...DEFAULT_SETTINGS.api,
             protocol: PROTOCOL_SIYUAN_PROVIDER,
             siyuanProvider: "20260913135841-1u2j84c",
-            model: "gpt-5.1",
+            // 自定义模式的模型名留着：它不属于这个模式
+            model: "gpt-4o-mini",
+            siyuanModel: "gpt-5.1",
         };
         expect(hasProviderConfig(api)).toBe(true);
         expect(hasProviderEndpoint(api)).toBe(true);
+        expect(selectedModel(api)).toBe("gpt-5.1");
         expect(hasProviderConfig({...api, siyuanProvider: " "})).toBe(false);
         expect(hasProviderEndpoint({...api, siyuanProvider: ""})).toBe(false);
         // 模型没选时「获取模型列表」仍然可用：它要的只是端点
-        expect(hasProviderEndpoint({...api, model: ""})).toBe(true);
+        expect(hasProviderEndpoint({...api, siyuanModel: ""})).toBe(true);
+        expect(hasProviderConfig({...api, siyuanModel: ""})).toBe(false);
+        // 另一个模式的模型名填得再满也不算数
+        expect(hasProviderConfig({...api, siyuanModel: ""})).toBe(false);
+    });
+
+    it("自定义模式看的是 model，两种模式的模型名互不影响（#27）", () => {
+        const api: ApiSettings = {
+            ...DEFAULT_SETTINGS.api,
+            protocol: PROTOCOL_CHAT_COMPLETIONS,
+            baseURL: "https://example.com/v1",
+            model: "gpt-5.1",
+            siyuanModel: "gpt-5.2",
+        };
+        expect(selectedModel(api)).toBe("gpt-5.1");
         expect(hasProviderConfig({...api, model: ""})).toBe(false);
     });
 });

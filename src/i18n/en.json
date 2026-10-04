@@ -13,7 +13,7 @@
   "protocolDesc": "Pick what the provider actually serves. Importing a SiYuan provider follows its protocol",
 
   "provider": "Provider",
-  "providerDesc": "Protocol, base URL, API key and request headers all come from the provider selected under SiYuan Settings → AI → Providers. The plugin stores that provider's id only and keeps no copy of those values, so edits made in SiYuan apply here. If the list is empty, add a provider in SiYuan first; the other parameters on this page (temperature, thinking effort, ...) still apply",
+  "providerDesc": "Protocol, base URL, API key and headers come from the provider selected in SiYuan; the provider and model are picked once per device. Add one in SiYuan first if the list is empty",
   "providerPlaceholder": "Pick a provider",
 
   "baseUrl": "Base URL",
@@ -21,8 +21,8 @@
 
   "apiKey": "API Key",
   "apiKeyDesc": "Sent as Authorization: Bearer on Chat Completions and Responses, and as x-api-key on Messages. Leave empty if your endpoint needs no key",
-  "apiKeyDescInsecure": "No SiYuan data repo key was found, so the API key is kept in plain text in the plugin data directory. Initialize the data repo key under SiYuan Settings → Data repo key to store it encrypted",
-  "apiKeyUnreadable": "The stored API key could not be decrypted (the data repo key changed), so it has been cleared. Please enter it again in the plugin settings",
+  "apiKeyDescInsecure": "No SiYuan data repo key was found, so the API key is stored in plain text. Initialize the data repo key under SiYuan Settings → Data repo key to have it encrypted",
+  "apiKeyUnreadable": "The stored API key could not be decrypted (the data repo key changed), so it has been cleared. Please enter it again",
 
   "customHeaders": "Custom headers",
   "customHeadersDesc": "A JSON object, e.g. {\"x-opencode-session\": \"{{vars.SESSION}}\"}. A value may reference a SiYuan variable as {{vars.NAME}} or a secret as {{secrets.NAME}}; both are resolved before every request, and a secret is substituted only when its allowed hosts list contains the base URL's host. A header written here overrides the one the plugin sends itself",

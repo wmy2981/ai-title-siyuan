@@ -146,7 +146,8 @@ export function resolveApiSettings(api: ApiSettings): ResolvedApiSettings {
         apiKey: provider.apiKey ?? "",
         // 请求头交给 headers.ts 去解析与插值：与插件自己的自定义头是同一条路径
         customHeaders: providerHeadersText(provider),
-        model: api.model.trim() === "" ? activeModelName(provider) : api.model,
+        // 模型名是每设备独立选的（见 device-store.ts），没选时用供应商启用中的那个兜底
+        model: api.siyuanModel.trim() === "" ? activeModelName(provider) : api.siyuanModel,
     };
 }
 
