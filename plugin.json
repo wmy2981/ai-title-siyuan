@@ -13,7 +13,7 @@
   "disabledInPublish": true,
   "displayName": {
     "default": "AI Title",
-    "zh-CN": "AI标题生成"
+    "zh-CN": "AI 标题生成"
   },
   "description": {
     "default": "Generate note titles with the Chat Completions, Responses or Anthropic Messages API",
