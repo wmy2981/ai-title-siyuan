@@ -114,6 +114,17 @@ function reportApplyFailures(
     }
 }
 
+/**
+ * 给面板挂上私有类名，样式里据此常驻 `will-change: transform`（见 index.scss）。
+ *
+ * 面板在移动端几乎铺满屏幕，入场走的仍是思源自己的 scale + 淡入过渡：不预热合成层时，
+ * 入场那几帧要新建图层，App 的 WebView 会在面板四周留一帧旧画面。`will-change` 只声明
+ * 这个元素会变 transform，不改过渡也不改透明度，宿主动画原样保留。
+ */
+export function preheatPanel(dialog: Dialog): void {
+    dialog.element.querySelector<HTMLElement>(".b3-dialog__container")?.classList.add("ai-title__panel");
+}
+
 export function openGenerateDialog(options: GenerateDialogOptions): void {
     const {t, batchErrors, api, behavior} = options;
     const notes = options.notes;
@@ -127,6 +138,7 @@ export function openGenerateDialog(options: GenerateDialogOptions): void {
         content: '<div class="b3-dialog__content"><div class="ai-title__dialog"></div></div>' +
             '<div class="b3-dialog__action"></div>',
     });
+    preheatPanel(dialog);
 
     const body = dialog.element.querySelector<HTMLElement>(".ai-title__dialog");
     const action = dialog.element.querySelector<HTMLElement>(".b3-dialog__action");

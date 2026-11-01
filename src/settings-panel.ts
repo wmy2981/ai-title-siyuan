@@ -10,7 +10,7 @@
  * 与「导入后重刷」共用同一条路径。漏掉开头那次 sync 会让面板一律显示空白——
  * 存进去的配置看上去就像根本没保存成功。
  */
-import {Dialog, Menu, showMessage} from "siyuan";
+import {Dialog, getFrontend, Menu, showMessage} from "siyuan";
 import {listModels, testConnection} from "./api/client";
 import {
     activeModelName,
@@ -61,6 +61,7 @@ import {
     type TruncateMode,
 } from "./config";
 import {setDebug} from "./debug";
+import {preheatPanel} from "./dialog";
 import type {T} from "./i18n";
 import {canEncrypt} from "./secret";
 
@@ -221,6 +222,21 @@ function moveFocus(list: HTMLElement, event: KeyboardEvent): void {
 }
 
 /**
+ * 菜单关掉后把焦点还给模型输入框。
+ *
+ * 桌面端要还：键盘操作不该因为挑了个模型就断掉。
+ * 移动端不能还：给输入框补一次 focus() 会重新拉起键盘，键盘引起的 adjustResize
+ * 会改掉 WebView 高度，整页跟着重排。
+ */
+function restoreAnchorFocus(anchor: HTMLInputElement): void {
+    const frontend = getFrontend();
+    if (frontend === "mobile" || frontend === "browser-mobile") {
+        return;
+    }
+    anchor.focus();
+}
+
+/**
  * 模型选择器：点输入框弹出可搜索的下拉。
  *
  * 取自思源 AI 设置里选模型的实现（config/tabs/ai/aiProviderUi.ts 的 openAvailableModelMenu），
@@ -254,7 +270,7 @@ function openModelMenu(anchor: HTMLInputElement, models: string[], t: T, onPick:
                 const id = item.dataset.model ?? "";
                 onPick(id);
                 menu.close();
-                anchor.focus();
+                restoreAnchorFocus(anchor);
             };
             const filter = () => {
                 const keyword = search.value.toLowerCase().trim();
@@ -286,7 +302,7 @@ function openModelMenu(anchor: HTMLInputElement, models: string[], t: T, onPick:
                     event.preventDefault();
                 } else if (event.key === "Escape") {
                     menu.close();
-                    anchor.focus();
+                    restoreAnchorFocus(anchor);
                     event.preventDefault();
                 }
             });
@@ -354,6 +370,7 @@ export function openSettingsPanel(options: SettingsPanelOptions): void {
         content: '<div class="b3-dialog__content"><div class="config ai-title-settings"></div></div>' +
             '<div class="b3-dialog__action"></div>',
     });
+    preheatPanel(dialog);
     const root = dialog.element.querySelector<HTMLElement>(".ai-title-settings");
     const action = dialog.element.querySelector<HTMLElement>(".b3-dialog__action");
     if (!root || !action) {
@@ -796,6 +813,7 @@ function openImportDialog(t: T, settings: PluginSettings, onImported: () => void
         width: "640px",
         content: '<div class="b3-dialog__content"><div class="ai-title__importing"></div></div>',
     });
+    preheatPanel(dialog);
     const body = dialog.element.querySelector<HTMLElement>(".ai-title__importing");
     if (!body) {
         return;
