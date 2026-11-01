@@ -94,7 +94,7 @@ Some providers insist on headers of their own. opencode, for one, wants a stable
 
 Bulk-renaming documents is destructive and SiYuan's rename has no undo stack. **A failed batch still opens the dialog first**: some notes came back without a title, and that is worth seeing before applying the rest.
 
-Titles may contain inline Markdown. On SiYuan 3.8.10 and later a title with inline Markdown is written as a rich-text title source, so bold, italic, code and links render as such; a plain-title document is upgraded to the rich format when that happens (older SiYuan clients may not read that document), and stays plain — a plain rename — when the title has no Markdown. Older SiYuan versions cannot store rich titles, so the markers are stripped before renaming there. When the generated text matches the current title text the title is left untouched; otherwise the whole title is replaced with the generated one.
+Titles may contain inline Markdown. On SiYuan 3.8.10 and later a title with inline Markdown is written as a rich-text title source, so bold, italic, strikethrough, highlight, superscript, subscript, code, underline, keyboard and links render as such; a plain-title document is upgraded to the rich format when that happens (older SiYuan clients may not read that document), and stays plain — a plain rename — when the title has no Markdown. Underline and keyboard have no Markdown syntax, so `<u>` and `<kbd>` are the only raw HTML tags passed through; every other tag stays literal text. Older SiYuan versions cannot store rich titles, so the markers are stripped before renaming there. When the generated text matches the current title text the title is left untouched; otherwise the whole title is replaced with the generated one.
 
 ## Usage
 

@@ -13,8 +13,17 @@ interface LuteEngine {
     InlineMd2BlockDOM?: (markdown: string) => string;
     Md2BlockDOM?: (markdown: string) => string;
     BlockDOM2Content: (dom: string) => string;
+    /** 送进解析器的 Markdown。 */
     seen: string[];
+    /** 行内解析开关的取值，键是开关名。 */
+    options: {[name: string]: boolean};
 }
+
+/** 生产代码会逐项打开的解析开关；这里只需要存在，并把取值记下来。 */
+const LUTE_SWITCHES = [
+    "SetMark", "SetSub", "SetSup", "SetGFMStrikethrough", "SetGFMStrikethrough1",
+    "SetHTMLTag2TextMark", "SetProtyleWYSIWYG", "SetSanitize",
+];
 
 const scope = globalThis as unknown as {window?: {Lute: {New: () => LuteEngine}}};
 
@@ -25,6 +34,7 @@ function useLute(engine: LuteEngine | undefined): void {
 /** 把 **粗体** 变成行内标签；取文时标签和标记都消失，模拟 Lute 的解析结果。 */
 function fakeLute(options: {inline?: boolean} = {}): LuteEngine {
     const seen: string[] = [];
+    const switches: {[name: string]: boolean} = {};
     const toDOM = (markdown: string): string => {
         seen.push(markdown);
         const html = markdown.replace(/\*\*(.+?)\*\*/g, '<span data-type="strong">$1</span>');
@@ -32,11 +42,17 @@ function fakeLute(options: {inline?: boolean} = {}): LuteEngine {
     };
     const engine: LuteEngine = {
         seen,
+        options: switches,
         Md2BlockDOM: toDOM,
         BlockDOM2Content: (dom) => dom.replace(/<[^>]+>/g, "").trim(),
     };
     if (options.inline !== false) {
         engine.InlineMd2BlockDOM = toDOM;
+    }
+    for (const name of LUTE_SWITCHES) {
+        (engine as unknown as {[name: string]: (enable: boolean) => void})[name] = (enable: boolean): void => {
+            switches[name] = enable;
+        };
     }
     return engine;
 }
@@ -154,7 +170,7 @@ describe("applyTitles", () => {
         });
     });
 
-    it("标题里的原始 HTML 按字面交给 Lute，不变成块级结构", async () => {
+    it("原始 HTML 只放行下划线与键盘标签，其余按字面交给 Lute", async () => {
         const lute = fakeLute();
         useLute(lute);
         stubKernel({
@@ -162,9 +178,31 @@ describe("applyTitles", () => {
             "/api/transactions": OK,
         });
 
-        await applyTitles([{id: "doc1", title: "C++ <algorithm> 笔记"}]);
+        await applyTitles([{id: "doc1", title: "<u>下划线</u> 加 <kbd>Ctrl</kbd> 和 C++ <vector> 笔记"}]);
 
-        expect(lute.seen).toEqual(["C++ &lt;algorithm> 笔记"]);
+        expect(lute.seen).toEqual(["<u>下划线</u> 加 <kbd>Ctrl</kbd> 和 C++ &lt;vector> 笔记"]);
+    });
+
+    it("按思源编辑器的配置打开行内解析开关", async () => {
+        const lute = fakeLute();
+        useLute(lute);
+        stubKernel({
+            "/api/block/getDocTitle": RICH_TITLE,
+            "/api/transactions": OK,
+        });
+
+        await applyTitles([{id: "doc1", title: "==高亮== 与 H~2~O"}]);
+
+        expect(lute.options).toEqual({
+            SetMark: true,
+            SetSub: true,
+            SetSup: true,
+            SetGFMStrikethrough: true,
+            SetGFMStrikethrough1: false,
+            SetHTMLTag2TextMark: true,
+            SetProtyleWYSIWYG: true,
+            SetSanitize: true,
+        });
     });
 
     it("没有行内解析能力时退回完整源的纯文本形式", async () => {

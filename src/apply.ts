@@ -10,10 +10,10 @@
  * 先读 /api/block/getDocTitle 拿到格式、摘要与源版本，再向 /api/transactions
  * 提交单独的 setDocTitle 操作，用 BlockDOM 携带行级内容。
  *
- * 标题允许行内 Markdown：富文本标题交给 Lute 解析成行级内容（粗体、斜体、代码、
- * 链接等）；普通标题在生成结果确实带行内 Markdown 时才升级成富文本标题，否则
- * 按纯文本重命名。没有标题源接口的旧内核只能存纯文本，先把标记去掉。
- * 旧内核探测不到 getDocTitle 后，同一批里剩下的直接按普通标题处理。
+ * 标题允许行内 Markdown：富文本标题交给 Lute 解析成行级内容（粗体、斜体、删除线、
+ * 高亮、上下标、代码、下划线、键盘样式、链接等）；普通标题在生成结果确实带行内
+ * Markdown 时才升级成富文本标题，否则按纯文本重命名。没有标题源接口的旧内核只能
+ * 存纯文本，先把标记去掉。旧内核探测不到 getDocTitle 后，同一批里剩下的直接按普通标题处理。
  *
  * 注意思源的普通重命名没有撤销栈（内核 RenameDoc 不提供 undo），
  * 所以调用方必须在写入前把不可撤销这一点明确告诉用户。
@@ -44,24 +44,49 @@ interface KernelResponse<T> {
     data?: T;
 }
 
-/** 取一个 Lute 实例；拿不到时退回纯文本处理，不让标题写不进去。 */
+/**
+ * 取一个 Lute 实例；拿不到时退回纯文本处理，不让标题写不进去。
+ *
+ * 默认配置只想把 Markdown 当普通文本看：高亮、上下标不解析，单波浪线被当成删除线，
+ * 原始 HTML 行内标签不转成文本标记。这里按思源编辑器的行内解析配置打开它们，
+ * 标题才能和手动键入的效果一致。
+ */
 function lute(): Lute | undefined {
     if (typeof window === "undefined" || !window.Lute) {
         return undefined;
     }
     try {
-        return window.Lute.New();
+        const engine = window.Lute.New();
+        engine.SetMark(true);
+        engine.SetSub(true);
+        engine.SetSup(true);
+        engine.SetGFMStrikethrough(true);
+        // 单波浪线是下标，不是删除线
+        engine.SetGFMStrikethrough1(false);
+        engine.SetHTMLTag2TextMark(true);
+        // 让没配对的标签降级成字面文本，而不是块级 HTML
+        engine.SetProtyleWYSIWYG(true);
+        engine.SetSanitize(true);
+        return engine;
     } catch {
         return undefined;
     }
 }
 
 /**
+ * 下划线与键盘样式没有 Markdown 语法，只能用原始 HTML 标签表达，这两个标签放行。
+ */
+const INLINE_TAG = /^<\/?(?:u|kbd)>$/i;
+
+/** 一段标签，或一个落单的 `<`。 */
+const ANGLE = /<[^<>\n]*>|</g;
+
+/**
  * 标题只允许行级内容，先把 `<` 变成实体。
  * 原始 HTML 交给 Lute 会解析成块级结构，标题源会拒绝写入；按字面显示也更符合标题语义。
  */
 function literalAngles(title: string): string {
-    return title.replaceAll("<", "&lt;");
+    return title.replace(ANGLE, (match) => (INLINE_TAG.test(match) ? match : match.replaceAll("<", "&lt;")));
 }
 
 /** 把行内 Markdown 解析成单段落 BlockDOM；旧版 Lute 没有这个能力时返回 undefined。 */
