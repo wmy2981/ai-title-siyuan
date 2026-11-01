@@ -291,7 +291,7 @@ export const STORAGE_NAME = "settings";
 
 /**
  * 系统提示词只有硬性规定：返回格式、id 对应关系、标题形态。
- * 风格与语言偏好放在用户提示词里。
+ * 风格、语言偏好与可用的行内语法放在用户提示词里。
  *
  * 两份提示词都是固定的，设置页不再允许改写：它们定义了插件解析返回值所依赖的
  * JSON 契约，被改坏之后症状是「模型答了但插件读不出来」，用户很难自查。
@@ -310,7 +310,7 @@ Example:
 Rules:
 - Use the exact note id string as each key, verbatim.
 - Return exactly one entry per note provided.
-- The title must be plain text, no markdown, no surrounding quotes.
+- The title must be a single line, no surrounding quotes.
 - Never invent, translate, or alter a note id.
 - Output the raw JSON object only. No markdown fences, no explanation, no text before or after.
 
@@ -330,6 +330,9 @@ export const DEFAULT_USER_PROMPT = `Generate a title for each of the following n
 
 Language: {{language}}
 Style: {{style}}
+
+A title may use inline Markdown: **bold**, *italic*, ==highlight==, ~~strikethrough~~, <u>underline</u>, H~2~O (subscript), x^2^ (superscript), <kbd>Ctrl</kbd> (keyboard), [link](https://example.com).
+Use it only where it makes the title clearer: mark what carries the point and leave the rest as plain text, rather than styling the whole title.
 
 {{content}}
 

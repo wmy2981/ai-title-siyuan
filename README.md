@@ -12,7 +12,7 @@ A SiYuan plugin that names your notes for you. Select one or more notes, and it 
 
 SiYuan names a new document `Untitled`. Renaming later is a manual chore, and doing it for a folder full of notes is tedious enough that most people never get around to it.
 
-This plugin does the naming pass for you. It reads each note's content, asks a model for a title, and writes it back through the kernel's own rename path so the document path, its child documents' paths and the search index all stay consistent.
+This plugin does the naming pass for you. It reads each note's content, asks a model for a title, and writes it back through the kernel's own title APIs so the document path, its child documents' paths and the search index all stay consistent.
 
 ## Features
 
@@ -94,6 +94,8 @@ Some providers insist on headers of their own. opencode, for one, wants a stable
 
 Bulk-renaming documents is destructive and SiYuan's rename has no undo stack. **A failed batch still opens the dialog first**: some notes came back without a title, and that is worth seeing before applying the rest.
 
+Titles may contain inline Markdown. On SiYuan 3.8.10 and later a title with inline Markdown is written as a rich-text title source, so bold, italic, strikethrough, highlight, superscript, subscript, code, underline, keyboard and links render as such; a plain-title document is upgraded to the rich format when that happens (older SiYuan clients may not read that document), and stays plain — a plain rename — when the title has no Markdown. Underline and keyboard have no Markdown syntax, so `<u>` and `<kbd>` are the only raw HTML tags passed through; every other tag stays literal text. Older SiYuan versions cannot store rich titles, so the markers are stripped before renaming there. When the generated text matches the current title text the title is left untouched; otherwise the whole title is replaced with the generated one.
+
 ## Usage
 
 Four entry points, all doing the same thing:
@@ -119,6 +121,10 @@ Enable **Debug mode** in the settings and open the console: it shows the full re
 | `Anthropic thinking needs an output token limit of at least 2048` | A thinking level is on while **Max output tokens** is below 2048. Raise it, or set **Thinking effort** to **Default**.                                                                                                                                                                                                                                    |
 | The model returns nothing                                         | Reasoning may have consumed the whole output budget. Raise **Max output tokens** or set **Thinking effort** to **Disabled**.                                                                                                                                                                                                                              |
 | Titles not in the language you want                               | Change **Title language**. It defaults to your SiYuan interface language.                                                                                                                                                                                                                                                                                 |
+
+## Bazaar Stats Graph
+
+![Bazaar stats graph](https://siyuan-bazaar-stats-graph.sr1.cc.cd/api/chart/wmy2981/ai-title-siyuan?metrics=downloads,rating,ratings&range=all&area=true&lang=en)
 
 ## Development
 
