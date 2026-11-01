@@ -1,6 +1,13 @@
 // 全部样式都挂在插件私有类名下，避免影响思源自身界面。
 // 颜色一律走思源的主题变量，保证跟随明暗主题。
 
+// 对话框面板（由 preheatPanel 挂上类名）。入场过渡完全交给思源自己的 scale + 淡入，
+// 这里只常驻 will-change 预热合成层：面板在移动端几乎铺满屏幕，图层不预热时入场那几帧
+// 要新建图层，App 的 WebView 会在面板四周留下上一帧的旧画面。
+.ai-title__panel {
+    will-change: transform;
+}
+
 // 模型下拉挂在 body 下，不在 .ai-title-settings 里，所以单独写。
 // 菜单被撑到与输入框同宽后，内部过滤区要跟着放开——.b3-menu__filter 自带
 // min-width:260px / max-width:420px，不放开会把搜索框卡在中间。
