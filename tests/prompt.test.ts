@@ -46,6 +46,16 @@ describe("renderPrompt（#5 提示词追加位 / #21 当前标题）", () => {
         expect(user.endsWith("USER EXTRA")).toBe(true);
     });
 
+    it("用户提示词列出标题可用的行内语法", () => {
+        const {user} = renderPrompt([{id: "a", body: "正文", toc: ""}], behavior());
+
+        for (const sample of ["**bold**", "*italic*", "==highlight==", "~~strikethrough~~",
+            "<u>underline</u>", "H~2~O", "x^2^", "<kbd>Ctrl</kbd>", "[link](https://example.com)"]) {
+            expect(user).toContain(sample);
+        }
+        expect(user.indexOf("A title may use inline Markdown")).toBeLessThan(user.indexOf("<id>a</id>"));
+    });
+
     it("追加位为空时不留空行", () => {
         const {system, user} = renderPrompt([{id: "a", body: "正文", toc: ""}], behavior());
         expect(system.trim()).toBe(system);
