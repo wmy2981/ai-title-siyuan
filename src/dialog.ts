@@ -132,6 +132,21 @@ export function preheatPanel(dialog: Dialog): void {
     dialog.element.querySelector<HTMLElement>(".b3-dialog__container")?.classList.add("ai-title__panel");
 }
 
+/**
+ * 关窗时不把焦点还给打开前的元素（#46）。
+ *
+ * 宿主 `Dialog` 构造时把当前焦点元素记成 `previousFocus`，`destroy()` 之后再 `focus()` 回去
+ * （app/src/dialog/index.ts）。移动端 App 又把 `HTMLElement.prototype.focus` 改写成经原生桥接
+ * 唤起软键盘（app/src/mobile/index.ts）：在设置面板之上再关一层弹窗时，这一下没人要的键盘
+ * 会改掉 WebView 高度并整页重排，真机上表现为卡一下、偶发重载前端。
+ *
+ * 该字段在 `siyuan` 包里没有类型声明，只为这一处做窄类型扩展，不扩散成全局断言。
+ * 宿主改名时这里静默失效，代价只是焦点回到 body，不会连带其它行为。
+ */
+export function skipFocusRestore(dialog: Dialog): void {
+    (dialog as Dialog & {previousFocus?: HTMLElement}).previousFocus = undefined;
+}
+
 export function openGenerateDialog(options: GenerateDialogOptions): void {
     const {t, batchErrors, api, behavior} = options;
     const notes = options.notes;

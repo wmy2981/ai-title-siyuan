@@ -61,7 +61,7 @@ import {
     type TruncateMode,
 } from "./config";
 import {setDebug} from "./debug";
-import {preheatPanel} from "./dialog";
+import {preheatPanel, skipFocusRestore} from "./dialog";
 import type {T} from "./i18n";
 import {canEncrypt} from "./secret";
 
@@ -1427,12 +1427,30 @@ function openImportDialog(t: T, settings: PluginSettings, onImported: () => void
         return;
     }
 
+    // 导入窗是叠在设置面板之上的第二层弹窗（#46）。宿主 `Dialog` 构造时把当前焦点元素记成
+    // `previousFocus`，关闭后再 `focus()` 回去（app/src/dialog/index.ts），而 App 把
+    // `HTMLElement.prototype.focus` 重写成经原生桥接唤起软键盘：关窗那一刻弹键盘会让
+    // WebView 重排，真机上表现为卡一下、甚至重载前端。
+    // 先把焦点交给 body，再让宿主不留可恢复的目标 —— 关掉导入窗时不会再隐式聚焦面板里的控件。
+    // 只改移动端：桌面端没有这条原生桥接，焦点照常还回去，键盘导航不受影响。
+    const frontend = getFrontend();
+    const mobile = frontend === "mobile" || frontend === "browser-mobile";
+    if (mobile) {
+        const active = document.activeElement;
+        if (active instanceof HTMLElement && active !== document.body) {
+            active.blur();
+        }
+    }
+
     const dialog = new Dialog({
         title: t("importDialogTitle"),
         width: "640px",
         content: '<div class="b3-dialog__content"><div class="ai-title__importing"></div></div>',
     });
     preheatPanel(dialog);
+    if (mobile) {
+        skipFocusRestore(dialog);
+    }
     const body = dialog.element.querySelector<HTMLElement>(".ai-title__importing");
     if (!body) {
         return;
