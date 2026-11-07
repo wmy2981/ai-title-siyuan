@@ -114,6 +114,24 @@ function reportApplyFailures(
     }
 }
 
+/**
+ * 给对话框外壳挂上私有类名，样式里据此常驻 `will-change: transform`（见 index.scss）。
+ *
+ * 宿主的 `.b3-dialog__container` 用 `transform: scale(.8)` + `opacity: 0` 淡入，`.b3-dialog__scrim`
+ * 同时淡入遮罩：过渡的起点与终点浏览器都要新建、销毁合成层，而 App 的 WebView 在拆层那一帧
+ * 只能提交旧的页面纹理，面板打开时就插一帧旧画面（移动端上尤其明显，面板几乎铺满屏幕）。
+ * 这里在加入场类之前就挂上私有类，让图层在过渡开始前已经存在，入场只改它的属性。
+ *
+ * 只加图层提示，不覆盖宿主的 `transition`，也不改 `b3-dialog--open` 的切换时序。
+ *
+ * 宿主 `Dialog` 本身有 `containerClassName` 选项，但 `siyuan` 包里还没有这个字段的类型声明
+ * （见 minAppVersion 对应的 app/src/dialog/index.ts），所以按构造完立即补类的写法处理，
+ * 不给全项目扩散类型断言。
+ */
+export function preheatPanel(dialog: Dialog): void {
+    dialog.element.querySelector<HTMLElement>(".b3-dialog__container")?.classList.add("ai-title__panel");
+}
+
 export function openGenerateDialog(options: GenerateDialogOptions): void {
     const {t, batchErrors, api, behavior} = options;
     const notes = options.notes;
@@ -127,6 +145,8 @@ export function openGenerateDialog(options: GenerateDialogOptions): void {
         content: '<div class="b3-dialog__content"><div class="ai-title__dialog"></div></div>' +
             '<div class="b3-dialog__action"></div>',
     });
+    // 正文全在下面同步拼完，入场期间不再插入、替换任何内容
+    preheatPanel(dialog);
 
     const body = dialog.element.querySelector<HTMLElement>(".ai-title__dialog");
     const action = dialog.element.querySelector<HTMLElement>(".b3-dialog__action");
