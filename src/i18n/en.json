@@ -3,6 +3,7 @@
 
   "groupApi": "API configuration",
   "groupBehavior": "Behavior",
+  "groupExtension": "Extensions",
   "groupUi": "Interface",
 
   "protocol": "Protocol",
@@ -117,6 +118,9 @@
   "systemExtraDesc": "Appended after the built-in system prompt. The built-in prompt is fixed; its content determines whether the plugin can parse the model's reply",
   "userExtra": "Extra user instructions",
   "userExtraDesc": "Appended at the end of the user prompt, after the note content",
+
+  "autoTitleOnPaste": "Title unnamed notes pasted into",
+  "autoTitleOnPasteDesc": "Applies only to a note with no body and no title yet: pasting content asks for a title and writes it back to that note. It ignores Apply titles automatically, and a note you already named keeps its title even when its body is empty",
 
   "showTopBar": "Show toolbar button",
   "showTopBarDesc": "Adds a generate button to the top bar",

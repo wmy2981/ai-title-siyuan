@@ -3,6 +3,7 @@
 
   "groupApi": "接口配置",
   "groupBehavior": "行为配置",
+  "groupExtension": "拓展",
   "groupUi": "界面",
 
   "protocol": "协议",
@@ -117,6 +118,9 @@
   "systemExtraDesc": "追加在内置系统提示词之后。内置提示词固定不可修改，其内容决定插件能否解析模型回复",
   "userExtra": "追加用户提示词",
   "userExtraDesc": "追加在用户提示词末尾，位于笔记内容之后",
+
+  "autoTitleOnPaste": "未命名的空白笔记粘贴后自动生成标题",
+  "autoTitleOnPasteDesc": "只在笔记还没有正文、也还没有标题时生效：粘贴内容后自动请求标题并直接写回该笔记。此功能忽略「自动应用标题」，已命名的笔记即使内容为空也不会被改名",
 
   "showTopBar": "显示顶栏按钮",
   "showTopBarDesc": "在顶栏添加为当前笔记生成标题的按钮",

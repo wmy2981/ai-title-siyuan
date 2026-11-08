@@ -1,11 +1,19 @@
 // 全部样式都挂在插件私有类名下，避免影响思源自身界面。
 // 颜色一律走思源的主题变量，保证跟随明暗主题。
 
-// 对话框面板（由 preheatPanel 挂上类名）。入场过渡完全交给思源自己的 scale + 淡入，
-// 这里只常驻 will-change 预热合成层：面板在移动端几乎铺满屏幕，图层不预热时入场那几帧
-// 要新建图层，App 的 WebView 会在面板四周留下上一帧的旧画面。
+// 对话框（由 dialog.ts 的 preheatPanel 挂上类名）。入场完全用思源自己的
+// `transform: scale(.8)` + 淡入过渡，这里只常驻 `will-change` 预热合成层：
+// 图层不预热时，过渡的起点与终点都要新建、销毁合成层，App 的 WebView 在拆层
+// 那一帧只能提交旧的页面纹理，打开面板时就插一帧旧画面。
+// 滚动正文（.b3-dialog__content，以及确认窗口里真正滚动的 .ai-title__dialog）同样处理：
+// 只处理外壳时，出现过外壳正常、正文混入旧画面的情况。
 .ai-title__panel {
     will-change: transform;
+
+    .b3-dialog__content,
+    .ai-title__dialog {
+        will-change: transform;
+    }
 }
 
 // 模型下拉挂在 body 下，不在 .ai-title-settings 里，所以单独写。
@@ -119,47 +127,68 @@
 }
 
 // ---- 设置面板 ----
-// 分组结构直接复用思源设置页的 .config / .config-title / .config-items，
-// 这里只补两处那套规则在对话框里不合用的地方。
-.ai-title-settings {
-    // 设置页里首个标题的上边距由外层容器让位，对话框自带 16px padding，去掉重复的一份
-    > .config-title:first-child {
-        margin-top: 4px;
+// 面板由官方 Setting 渲染（对话框与移动端抽屉都由宿主决定），这里只补三处它没有的东西：
+// 分组标题、组合控件行，以及本插件文本域的尺寸规则。
+// 选择器一律靠本插件的私有类名定位，不会命中思源的设置项。
+
+// 分组标题。官方 Setting 只有平铺的设置项，分组标题由一条不含控件的设置项实现
+// （见 settings-panel.ts 的 addGroupTitle，类名在面板打开后补上）。这里把这一行的标题按
+// 思源设置页 `.config-title` 的样子渲染，并把设置项那套留白、分隔线和空行收掉，
+// 看上去是分组而不是一条设置项。
+.config-item.ai-title__group-row {
+    padding: 24px 24px 0;
+    border-bottom: 0;
+
+    // 面板顶部自带 16px 内边距，首个分组标题不必再让出一份
+    &:first-child {
+        padding-top: 4px;
     }
 
-    // 组合控件：输入框占满剩余宽度，按钮跟在后面
-    &__field-row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
+    .config-name {
+        font-size: 15px;
+        font-weight: bold;
+        color: var(--b3-theme-on-background);
+    }
 
+    // 只用来定位这一行的标记，以及标题与控件之间的空行，都不显示
+    > .fn__block > .fn__hr,
+    > .fn__block > .ai-title__group {
+        display: none;
+    }
+}
+
+// 组合控件（模型名 + 获取模型列表 + 测试连接）：输入框占满剩余宽度，按钮跟在后面
+.ai-title-settings__field-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+
+    > .b3-text-field {
+        flex: 1;
+        min-width: 200px;
+    }
+
+    // 窄屏（移动端）下输入框独占一行，两个按钮等分第二行。
+    // 不能让换行结果继续由「按钮当前有多宽」决定：标签从「获取模型列表」
+    // 变成「获取中…」后按钮变窄，原本放不下的行突然放得下，按钮就当着
+    // 用户的面跳回输入框同一行（#10）。输入框拉满、按钮等分之后，
+    // 布局只与容器宽度有关，与标签无关。
+    @media (max-width: 480px) {
         > .b3-text-field {
-            flex: 1;
-            min-width: 200px;
+            flex: 1 1 100%;
         }
 
-        // 窄屏（移动端）下输入框独占一行，两个按钮等分第二行。
-        // 不能让换行结果继续由「按钮当前有多宽」决定：标签从「获取模型列表」
-        // 变成「获取中…」后按钮变窄，原本放不下的行突然放得下，按钮就当着
-        // 用户的面跳回输入框同一行（#10）。输入框拉满、按钮等分之后，
-        // 布局只与容器宽度有关，与标签无关。
-        @media (max-width: 480px) {
-            > .b3-text-field {
-                flex: 1 1 100%;
-            }
-
-            > .b3-button {
-                flex: 1 1 0;
-                justify-content: center;
-            }
+        > .b3-button {
+            flex: 1 1 0;
+            justify-content: center;
         }
     }
+}
 
-    // 提示词文本域随内容伸缩，但别拖成一整屏
-    textarea.b3-text-field {
-        resize: vertical;
-        min-height: 72px;
-        max-height: 320px;
-    }
+// 提示词文本域随内容伸缩，但别拖成一整屏
+textarea.ai-title__textarea {
+    resize: vertical;
+    min-height: 72px;
+    max-height: 320px;
 }

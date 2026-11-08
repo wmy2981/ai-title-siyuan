@@ -1,16 +1,16 @@
 /**
  * 设置面板。
  *
- * 用 Dialog 而不是 Setting：Setting.addItem 只能把一个控件塞进一行，表达不了分组，
- * 分组标题会长得和普通设置项一模一样。这里按思源设置页自己的标记结构产出内容
- * （`.config` > `.config-title` + `.config-items`），直接复用那套样式规则；
- * 保存/取消按钮的搭法照抄 Setting 的实现，所以外观与行为一致。
+ * 用官方的 `Setting` + `addItem`，不再自建对话框：面板的对话框、保存/取消按钮和移动端形态
+ * 都交给宿主决定。宿主从 v3.8.10-alpha.7 起把 `Setting` 建在 `MobileDialog` 上，移动端会自动
+ * 以底部抽屉打开（siyuan-note/siyuan#21160），插件这边不自行实现抽屉。
  *
  * 控件只绑事件、不写初值：初值统一由各组返回的 sync 写入，
  * 与「导入后重刷」共用同一条路径。漏掉开头那次 sync 会让面板一律显示空白——
  * 存进去的配置看上去就像根本没保存成功。
  */
-import {Dialog, getFrontend, Menu, showMessage} from "siyuan";
+import {Dialog, getFrontend, Menu, Setting, showMessage} from "siyuan";
+import {parseCustomHeaders} from "./api/headers";
 import {listModels, testConnection} from "./api/client";
 import {
     activeModelName,
@@ -61,7 +61,7 @@ import {
     type TruncateMode,
 } from "./config";
 import {setDebug} from "./debug";
-import {preheatPanel} from "./dialog";
+import {preheatPanel, skipFocusRestore} from "./dialog";
 import type {T} from "./i18n";
 import {canEncrypt} from "./secret";
 
@@ -83,83 +83,6 @@ function formatHeaders(headers: Record<string, string> | undefined): string {
 /** 把配置写回本组各控件。导入会整体替换接口配置，届时需要重跑。 */
 type Sync = () => void;
 
-/**
- * 分组容器：与思源设置页同构（.config > .config-title + .config-items）。
- * 必须挂在 .config 之下，否则这些规则不生效。
- */
-function createGroup(root: HTMLElement, title: string): HTMLElement {
-    const heading = document.createElement("div");
-    heading.className = "config-title";
-    heading.textContent = title;
-
-    const items = document.createElement("div");
-    items.className = "config-items";
-
-    root.append(heading, items);
-    return items;
-}
-
-/** 设置项的标题与说明，两种布局共用。 */
-function labelBlock(title: string, description: string): HTMLElement {
-    const box = document.createElement("div");
-    const name = document.createElement("div");
-    name.className = "config-name";
-    name.textContent = title;
-    box.append(name);
-    if (description !== "") {
-        const text = document.createElement("div");
-        text.className = "b3-label__text";
-        text.textContent = description;
-        box.append(text);
-    }
-    return box;
-}
-
-/**
- * 左标题右控件。
- * 开关交给思源自己渲染：Setting 见到含 b3-switch 的行会把它变成 label，
- * 整行可点即可切换；其余控件补 fn__size200 保持设置页统一的控件宽度。
- * 返回整行，便于调用方按条件隐藏（如「保留开头和末尾」才需要比例输入）。
- */
-function rowItem(items: HTMLElement, title: string, description: string, field: HTMLElement): HTMLElement {
-    const isSwitch = field.classList.contains("b3-switch");
-    const row = document.createElement(isSwitch ? "label" : "div");
-    row.className = "fn__flex b3-label config-item";
-
-    const main = labelBlock(title, description);
-    main.classList.add("fn__flex-1");
-
-    const space = document.createElement("span");
-    space.className = "fn__space";
-
-    field.classList.add("fn__flex-center");
-    if (!isSwitch) {
-        field.classList.add("fn__size200");
-    }
-
-    row.append(main, space, field);
-    items.append(row);
-    return row;
-}
-
-/** 标题在上、控件占满整行。文本域和「下拉 + 附加输入」这类组合控件用这个。 */
-function stackItem(items: HTMLElement, title: string, description: string, field: HTMLElement): HTMLElement {
-    const row = document.createElement("div");
-    row.className = "b3-label config-item";
-
-    const block = document.createElement("div");
-    block.className = "fn__block";
-
-    const space = document.createElement("div");
-    space.className = "fn__hr";
-
-    field.classList.add("fn__block");
-    block.append(labelBlock(title, description), space, field);
-    row.append(block);
-    items.append(row);
-    return row;
-}
-
 function input(className = "b3-text-field"): HTMLInputElement {
     const node = document.createElement("input");
     node.className = className;
@@ -174,7 +97,8 @@ function select(): HTMLSelectElement {
 
 function textarea(rows: number): HTMLTextAreaElement {
     const node = document.createElement("textarea");
-    node.className = "b3-text-field fn__block";
+    // 私有类名：文本域的尺寸规则要只落在本插件的文本框上
+    node.className = "b3-text-field fn__block ai-title__textarea";
     node.rows = rows;
     return node;
 }
@@ -225,8 +149,11 @@ function moveFocus(list: HTMLElement, event: KeyboardEvent): void {
  * 菜单关掉后把焦点还给模型输入框。
  *
  * 桌面端要还：键盘操作不该因为挑了个模型就断掉。
- * 移动端不能还：给输入框补一次 focus() 会重新拉起键盘，键盘引起的 adjustResize
- * 会改掉 WebView 高度，整页跟着重排。
+ *
+ * 移动端不能还。App 把 `HTMLElement.prototype.focus` 重写过：只要焦点落到 `input` / `textarea`
+ * 上就经原生桥接唤起软键盘（app/src/mobile/index.ts），键盘引起的 adjustResize 会改掉 WebView
+ * 高度、整页跟着重排——重排正好落在菜单退场与重绘之间，界面上就是那一下闪烁。
+ * 用户想继续改模型名，点一下输入框即可，不需要替他们弹键盘。
  */
 function restoreAnchorFocus(anchor: HTMLInputElement): void {
     const frontend = getFrontend();
@@ -356,74 +283,193 @@ export interface SettingsPanelOptions {
     onSave: (next: PluginSettings) => Promise<void>;
 }
 
-export function openSettingsPanel(options: SettingsPanelOptions): void {
-    const {t} = options;
-    // 复制一份，取消时不影响已保存的配置
-    const settings: PluginSettings = structuredClone(options.settings);
+/**
+ * 面板里的一个控件句柄。
+ *
+ * 官方 `Setting` 是在打开面板时才现场建控件（`createActionElement`），所以初值不能在建控件时
+ * 直接写死：元素拿到后统一走一次 sync，与「导入后重刷」共用同一条路径。
+ * `element` 在面板打开之前是空的，按模式隐藏整行要等打开后再从它往上找行。
+ */
+interface Field {
+    element?: HTMLElement;
+}
 
-    const dialog = new Dialog({
-        title: t("pluginName"),
-        // min() 让它在窄屏上自动收窄；桌面端就是 Setting 用的那个 768px
-        width: "min(768px, 92vw)",
-        // Setting 的默认高度，内容超出时由 .b3-dialog__content 滚动
-        height: "80vh",
-        content: '<div class="b3-dialog__content"><div class="config ai-title-settings"></div></div>' +
-            '<div class="b3-dialog__action"></div>',
+/** 控件所属的整行。官方 Setting 没有隐藏 API，隐藏只能给这一行加 `fn__none`。 */
+function rowOf(field: Field): HTMLElement | undefined {
+    return field.element?.closest(".config-item") ?? undefined;
+}
+
+/** 按模式隐藏一条设置项：整行连标题与说明一起藏掉。 */
+function hideRow(field: Field, hidden: boolean): void {
+    rowOf(field)?.classList.toggle("fn__none", hidden);
+}
+
+/**
+ * 加一条设置项。
+ *
+ * `build` 在面板打开时调用一次，控件必须在这一步完整建好并绑好事件：面板入场期间不再插入或
+ * 替换内容，否则那一帧要重排，会闪旧画面。`direction` 为 `row` 时标题在上、控件占满整行
+ * （文本域与「输入框 + 按钮」这类组合控件用），省略则标题在左、控件在右。
+ */
+function addField(setting: Setting, options: {
+    title: string;
+    description?: string;
+    direction?: "row" | "column";
+    build: () => HTMLElement;
+}): Field {
+    const field: Field = {};
+    setting.addItem({
+        title: options.title,
+        description: options.description,
+        direction: options.direction,
+        createActionElement: () => {
+            const element = options.build();
+            field.element = element;
+            return element;
+        },
     });
-    preheatPanel(dialog);
-    const root = dialog.element.querySelector<HTMLElement>(".ai-title-settings");
-    const action = dialog.element.querySelector<HTMLElement>(".b3-dialog__action");
-    if (!root || !action) {
-        dialog.destroy();
-        return;
+    return field;
+}
+
+/**
+ * 分组标题。
+ *
+ * 官方 `Setting.addItem` 只有平铺的设置项，没有分组概念。这里加一条不含控件的设置项当标题：
+ * `createActionElement` 返回一个私有标记元素，样式（index.scss）据此把这一行渲染成思源设置页
+ * 分组标题的样子，看上去是分组而不是一条设置项。标记元素本身只用来选中这一行，不显示。
+ */
+function addGroupTitle(setting: Setting, title: string): void {
+    setting.addItem({
+        title,
+        direction: "row",
+        createActionElement: () => {
+            const marker = document.createElement("div");
+            marker.className = "ai-title__group";
+            return marker;
+        },
+    });
+}
+
+/**
+ * 给官方面板的对话框预热图层。
+ *
+ * `Setting` 自己建对话框（新版移动端是 `MobileDialog` 抽屉），入场过渡仍是宿主的 scale + 淡入：
+ * 图层不预热时，过渡起点与终点都要新建、销毁合成层，App 的 WebView 在拆层那一帧只能提交旧纹理。
+ * `Setting.dialog` 运行时存在，`siyuan` 包的类型声明里还没有它 —— 只为这一处做窄类型扩展。
+ */
+/**
+ * 给分组标题行补上类名。
+ *
+ * 样式（index.scss）据此把这一行渲染成思源设置页的分组标题。类名在面板打开后、第一帧绘制前
+ * 补上（与下面写初值、按模式隐藏同一次同步流程），所以入场期间不会有样式层变动。
+ */
+function markGroupRows(setting: Setting): void {
+    const dialog = (setting as Setting & {dialog?: Dialog}).dialog;
+    dialog?.element.querySelectorAll(".ai-title__group").forEach((marker) => {
+        marker.closest(".config-item")?.classList.add("ai-title__group-row");
+    });
+}
+
+function preheatSetting(setting: Setting): void {
+    const dialog = (setting as Setting & {dialog?: Dialog}).dialog;
+    if (dialog) {
+        preheatPanel(dialog);
     }
+}
 
-    const cancelButton = document.createElement("button");
-    cancelButton.className = "b3-button b3-button--cancel";
-    cancelButton.textContent = t("cancel");
-    cancelButton.addEventListener("click", () => dialog.destroy());
-
-    const space = document.createElement("div");
-    space.className = "fn__space";
-
-    const saveButton = document.createElement("button");
-    saveButton.className = "b3-button b3-button--text";
-    saveButton.textContent = t("save");
-    saveButton.addEventListener("click", async () => {
+/**
+ * 保存前拦住写坏的自定义请求头。
+ *
+ * 官方面板点保存是「先调确认回调、再关面板」，回调里抛错关不掉面板，用户刚改的内容会跟着消失。
+ * 所以在动作栏上提前截住保存按钮这一次点击：JSON 解析不过就报错、不关面板，改完再存。
+ * 输入框里按回车保存走的是同一个按钮，同样会被截住。取消按钮不经过这里。
+ */
+function guardSave(setting: Setting, t: T, settings: PluginSettings): void {
+    const dialog = (setting as Setting & {dialog?: Dialog}).dialog;
+    const action = dialog?.element.querySelector<HTMLElement>(".b3-dialog__action");
+    action?.addEventListener("click", (event) => {
+        const target = event.target as HTMLElement | null;
+        const saveButton = target?.closest(".b3-button--text");
+        if (!saveButton || !action.contains(saveButton)) {
+            return;
+        }
         try {
-            await options.onSave(settings);
+            parseCustomHeaders(settings.api.customHeaders);
         } catch (error) {
-            // 保存失败就不关窗，否则用户刚改的内容会跟着对话框一起消失
+            event.preventDefault();
+            event.stopPropagation();
             showMessage(
                 t("saveFailed", {message: error instanceof Error ? error.message : String(error)}),
                 12000,
                 "error",
             );
-            return;
         }
-        dialog.destroy();
+    }, true);
+}
+
+export function openSettingsPanel(options: SettingsPanelOptions): void {
+    const {t} = options;
+    // 复制一份，取消时不影响已保存的配置
+    const settings: PluginSettings = structuredClone(options.settings);
+
+    const setting = new Setting({
+        confirmCallback: async () => {
+            try {
+                await options.onSave(settings);
+            } catch (error) {
+                // 确认回调无法否决关闭，至少把失败原因说清楚
+                showMessage(
+                    t("saveFailed", {message: error instanceof Error ? error.message : String(error)}),
+                    12000,
+                    "error",
+                );
+            }
+        },
     });
-    action.append(cancelButton, space, saveButton);
 
     const syncs = [
-        buildApiGroup(root, t, settings),
-        buildBehaviorGroup(root, t, settings),
-        buildUiGroup(root, t, settings),
+        buildApiGroup(setting, t, settings),
+        buildBehaviorGroup(setting, t, settings),
+        buildExtensionGroup(setting, t, settings),
+        buildUiGroup(setting, t, settings),
     ];
+
+    // 移动端打开期间不聚焦输入控件。宿主 3.8.3～3.8.10-alpha.3 的 `Setting.open()` 结尾会对面板里
+    // 第一个 `input, textarea` 补一次 `focus()`（app/src/plugin/Setting.ts），而 App 把
+    // `HTMLElement.prototype.focus` 重写成经原生桥接唤起软键盘（app/src/mobile/index.ts），键盘引起的
+    // adjustResize 会改掉 WebView 高度、整页重排，面板弹出的那一帧就闪旧画面。
+    // 只包围这一段同步打开流程，打开结束立即还原：用户随后点输入框不经过这里，照常能输入。
+    const frontend = getFrontend();
+    const mobile = frontend === "mobile" || frontend === "browser-mobile";
+    if (!mobile) {
+        setting.open(t("pluginName"));
+    } else {
+        const prototype = HTMLElement.prototype;
+        const originalFocus = prototype.focus;
+        prototype.focus = function (this: HTMLElement, focusOptions?: FocusOptions) {
+            // 对话框容器等非输入控件的聚焦照常放行，不会唤键盘
+            if (!(this instanceof HTMLInputElement || this instanceof HTMLTextAreaElement)) {
+                originalFocus.call(this, focusOptions);
+            }
+        };
+        try {
+            setting.open(t("pluginName"));
+        } finally {
+            prototype.focus = originalFocus;
+        }
+    }
+    // 同一个同步流程里补图层提示与分组标题类名，第一帧绘制之前就已生效
+    preheatSetting(setting);
+    markGroupRows(setting);
+
     // 初值：与导入后的重刷走同一条路径，避免两处逻辑漂移
     syncs.forEach((sync) => sync());
 
-    // 自己搭对话框就得自己补上 Setting.addItem 会替我们做的那个 Ctrl+S
-    dialog.element.addEventListener("keydown", (event: KeyboardEvent) => {
-        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
-            event.preventDefault();
-            saveButton.click();
-        }
-    });
+    guardSave(setting, t, settings);
 }
 
-function buildApiGroup(root: HTMLElement, t: T, settings: PluginSettings): Sync {
-    const items = createGroup(root, t("groupApi"));
+function buildApiGroup(setting: Setting, t: T, settings: PluginSettings): Sync {
+    addGroupTitle(setting, t("groupApi"));
     const {api} = settings;
     const syncs: Sync[] = [];
 
@@ -454,177 +500,360 @@ function buildApiGroup(root: HTMLElement, t: T, settings: PluginSettings): Sync 
     /** 配置不全时的提示：两种模式缺的东西不是一回事。 */
     const missingConfigMessage = (): string => siyuanMode() ? t("testNoConfigProvider") : t("testNoConfig");
 
-    const protocol = select();
-    for (const value of PROTOCOLS) {
-        const option = document.createElement("option");
-        option.value = value;
-        option.textContent = protocolName(value, t);
-        protocol.append(option);
-    }
-    protocol.addEventListener("change", () => {
-        api.protocol = protocol.value as typeof api.protocol;
-        // 模式换了：该显示的整行换一批，供应商下拉也要按思源当前的配置重建
-        refresh();
+    let protocol: HTMLSelectElement | undefined;
+    addField(setting, {
+        title: t("protocol"),
+        description: t("protocolDesc"),
+        build: () => {
+            const node = select();
+            for (const value of PROTOCOLS) {
+                const option = document.createElement("option");
+                option.value = value;
+                option.textContent = protocolName(value, t);
+                node.append(option);
+            }
+            node.addEventListener("change", () => {
+                api.protocol = node.value as typeof api.protocol;
+                // 模式换了：该显示的整行换一批，供应商下拉也要按思源当前的配置重建
+                refresh();
+            });
+            protocol = node;
+            return node;
+        },
     });
     syncs.push(() => {
-        protocol.value = api.protocol;
+        if (protocol) {
+            protocol.value = api.protocol;
+        }
     });
-    rowItem(items, t("protocol"), t("protocolDesc"), protocol);
 
-    // 模型输入框先建出来：供应商下拉要往里填默认模型，而它那一行要排在自定义请求头之后
+    // 「获取模型列表」拉到的候选，供输入框点击时弹出（模型名本身仍允许直接手打）
     let availableModels: string[] = [];
-    const modelInput = input();
-    modelInput.placeholder = t("modelPlaceholder");
+    let modelInput: HTMLInputElement | undefined;
+    let fetchButton: HTMLButtonElement | undefined;
+    let provider: HTMLSelectElement | undefined;
+
     // 两种模式各有一个模型名字段：模型名只属于某一个供应商，共用一个字段会让切换模式时
     // 把一边的模型名带到另一边（见 config.ts 的 siyuanModel）
-    const setModel = (id: string) => {
+    const setModel = (id: string): void => {
         if (siyuanMode()) {
             api.siyuanModel = id;
         } else {
             api.model = id;
         }
-        modelInput.value = id;
-    };
-    modelInput.addEventListener("input", () => {
-        setModel(modelInput.value);
-    });
-    // 点输入框即可从已拉取的列表里挑；模型名本身仍允许直接手打
-    modelInput.addEventListener("click", () => {
-        if (availableModels.length > 0) {
-            openModelMenu(modelInput, availableModels, t, setModel);
+        if (modelInput) {
+            modelInput.value = id;
         }
+    };
+
+    // 模型名、获取列表与测试连接排在同一个控件里：三者都在改/验同一个模型名，
+    // 分开几行时用户点完测试还要回头找输入框在哪（#18）
+    addField(setting, {
+        title: t("modelName"),
+        description: t("modelNameDesc"),
+        direction: "row",
+        build: () => {
+            const node = input();
+            node.placeholder = t("modelPlaceholder");
+            node.addEventListener("input", () => setModel(node.value));
+            // 点输入框即可从已拉取的列表里挑
+            node.addEventListener("click", () => {
+                if (availableModels.length > 0) {
+                    openModelMenu(node, availableModels, t, setModel);
+                }
+            });
+            modelInput = node;
+
+            const fetch = document.createElement("button");
+            fetch.className = "b3-button b3-button--outline fn__flex-shrink";
+            fetch.textContent = t("fetchModels");
+            fetch.addEventListener("click", async () => {
+                // 只要求端点：模型名是这次要拉的东西，不能反过来要求它已经填好
+                if (!hasProviderEndpoint(api)) {
+                    showMessage(missingConfigMessage(), 6000, "error");
+                    return;
+                }
+                fetch.disabled = true;
+                fetch.textContent = t("fetchModelsLoading");
+                try {
+                    const models = await listModels(api, settings.behavior.timeout);
+                    if (models.length === 0) {
+                        showMessage(t("testFailed", {message: "no models returned"}), 8000, "error");
+                        return;
+                    }
+                    availableModels = models;
+                    // 拉完直接摊开，省得再点一次输入框
+                    openModelMenu(node, availableModels, t, setModel);
+                } catch (error) {
+                    showMessage(
+                        t("testFailed", {message: error instanceof Error ? error.message : String(error)}),
+                        12000,
+                        "error",
+                    );
+                } finally {
+                    fetch.disabled = false;
+                    fetch.textContent = t("fetchModels");
+                }
+            });
+            fetchButton = fetch;
+
+            const test = document.createElement("button");
+            test.className = "b3-button b3-button--outline fn__flex-shrink";
+            test.textContent = t("testConnection");
+            test.addEventListener("click", async () => {
+                if (!hasProviderConfig(api)) {
+                    showMessage(missingConfigMessage(), 6000, "error");
+                    return;
+                }
+                test.disabled = true;
+                test.textContent = t("testRunning");
+                try {
+                    const {reply, elapsed} = await testConnection(api, settings.behavior);
+                    showMessage(t("testOk", {reply, elapsed}), 6000);
+                } catch (error) {
+                    showMessage(
+                        t("testFailed", {message: error instanceof Error ? error.message : String(error)}),
+                        12000,
+                        "error",
+                    );
+                } finally {
+                    test.disabled = false;
+                    test.textContent = t("testConnection");
+                }
+            });
+
+            const box = document.createElement("div");
+            box.className = "ai-title-settings__field-row";
+            box.append(node, fetch, test);
+            return box;
+        },
     });
     syncs.push(() => {
-        modelInput.value = displayedModel();
+        if (modelInput) {
+            modelInput.value = displayedModel();
+        }
     });
 
     // 「使用思源设置中供应商」下唯一要在这里选的东西：插件只存这个 id，
     // 地址、密钥与请求头每次请求前从思源现取（#27）
-    const provider = select();
-    provider.addEventListener("change", () => {
-        api.siyuanProvider = provider.value;
-        // 跟随默认时模型名也由思源决定，这里不写 siyuanModel（#28）。
-        // 具体供应商则要跟着换模型：模型名只属于某个供应商，留着上一个的名字请求必然 404
-        if (!following()) {
-            const chosen = readSiyuanProviders().find((item) => item.id === provider.value);
-            if (chosen) {
-                setModel(activeModelName(chosen));
-                availableModels = providerModelNames(chosen);
-            }
+    const providerField = addField(setting, {
+        title: t("provider"),
+        description: t("providerDesc"),
+        build: () => {
+            const node = select();
+            node.addEventListener("change", () => {
+                api.siyuanProvider = node.value;
+                // 跟随默认时模型名也由思源决定，这里不写 siyuanModel（#28）。
+                // 具体供应商则要跟着换模型：模型名只属于某个供应商，留着上一个的名字请求必然 404
+                if (!following()) {
+                    const chosen = readSiyuanProviders().find((item) => item.id === node.value);
+                    if (chosen) {
+                        setModel(activeModelName(chosen));
+                        availableModels = providerModelNames(chosen);
+                    }
+                }
+                // 整行该显示的换一批：跟随默认时模型名要变成只读
+                refresh();
+            });
+            provider = node;
+            return node;
+        },
+    });
+
+    let baseURL: HTMLInputElement | undefined;
+    const baseURLField = addField(setting, {
+        title: t("baseUrl"),
+        description: t("baseUrlDesc"),
+        build: () => {
+            const node = input();
+            node.placeholder = "https://api.openai.com/v1";
+            node.addEventListener("input", () => {
+                api.baseURL = node.value;
+            });
+            baseURL = node;
+            return node;
+        },
+    });
+    syncs.push(() => {
+        if (baseURL) {
+            baseURL.value = api.baseURL;
         }
-        // 整行该显示的换一批：跟随默认时模型名要变成只读
-        refresh();
     });
-    const providerRow = rowItem(items, t("provider"), t("providerDesc"), provider);
 
-    const baseURL = input();
-    baseURL.placeholder = "https://api.openai.com/v1";
-    baseURL.addEventListener("input", () => {
-        api.baseURL = baseURL.value;
-    });
-    syncs.push(() => {
-        baseURL.value = api.baseURL;
-    });
-    const baseURLRow = rowItem(items, t("baseUrl"), t("baseUrlDesc"), baseURL);
-
-    const apiKey = input();
-    apiKey.type = "password";
-    apiKey.autocomplete = "off";
-    apiKey.addEventListener("input", () => {
-        api.apiKey = apiKey.value;
-    });
-    syncs.push(() => {
-        apiKey.value = api.apiKey;
-    });
+    let apiKey: HTMLInputElement | undefined;
     // 拿不到思源数据仓库密钥时，这个 Key 只能明文落盘，必须当场说明（#26）：
     // 换成密码框之后用户没有任何办法从界面上看出它到底有没有被加密
-    const apiKeyRow = rowItem(
-        items,
-        t("apiKey"),
-        canEncrypt() ? t("apiKeyDesc") : `${t("apiKeyDesc")} ${t("apiKeyDescInsecure")}`,
-        apiKey,
-    );
+    const apiKeyField = addField(setting, {
+        title: t("apiKey"),
+        description: canEncrypt() ? t("apiKeyDesc") : `${t("apiKeyDesc")} ${t("apiKeyDescInsecure")}`,
+        build: () => {
+            const node = input();
+            node.type = "password";
+            node.autocomplete = "off";
+            node.addEventListener("input", () => {
+                api.apiKey = node.value;
+            });
+            apiKey = node;
+            return node;
+        },
+    });
+    syncs.push(() => {
+        if (apiKey) {
+            apiKey.value = api.apiKey;
+        }
+    });
 
     // 与思源自己的供应商页面一样用一个 JSON 文本框：两边可以整段对拷，
     // 而「自定义请求头」这种名字与取值都不固定的东西列成表单反而更难看
-    const customHeaders = textarea(3);
-    customHeaders.spellcheck = false;
-    customHeaders.placeholder = t("customHeadersPlaceholder");
-    customHeaders.addEventListener("input", () => {
-        api.customHeaders = customHeaders.value;
+    let customHeaders: HTMLTextAreaElement | undefined;
+    const customHeadersField = addField(setting, {
+        title: t("customHeaders"),
+        description: t("customHeadersDesc"),
+        direction: "row",
+        build: () => {
+            const node = textarea(3);
+            node.spellcheck = false;
+            node.placeholder = t("customHeadersPlaceholder");
+            node.addEventListener("input", () => {
+                api.customHeaders = node.value;
+            });
+            customHeaders = node;
+            return node;
+        },
     });
     syncs.push(() => {
-        customHeaders.value = api.customHeaders;
-    });
-    const customHeadersRow = stackItem(items, t("customHeaders"), t("customHeadersDesc"), customHeaders);
-
-    const fetchButton = document.createElement("button");
-    fetchButton.className = "b3-button b3-button--outline fn__flex-shrink";
-    fetchButton.textContent = t("fetchModels");
-    fetchButton.addEventListener("click", async () => {
-        // 只要求端点：模型名是这次要拉的东西，不能反过来要求它已经填好
-        if (!hasProviderEndpoint(api)) {
-            showMessage(missingConfigMessage(), 6000, "error");
-            return;
+        if (customHeaders) {
+            customHeaders.value = api.customHeaders;
         }
-        fetchButton.disabled = true;
-        fetchButton.textContent = t("fetchModelsLoading");
-        try {
-            const models = await listModels(api, settings.behavior.timeout);
-            if (models.length === 0) {
-                showMessage(t("testFailed", {message: "no models returned"}), 8000, "error");
-                return;
+    });
+
+    const importField = addField(setting, {
+        title: t("importFromSiyuan"),
+        description: t("importFromSiyuanDesc"),
+        build: () => {
+            const node = document.createElement("button");
+            node.className = "b3-button b3-button--outline";
+            node.textContent = t("importFromSiyuan");
+            node.addEventListener("click", () => {
+                openImportDialog(t, settings, () => syncs.forEach((sync) => sync()));
+            });
+            return node;
+        },
+    });
+
+    // 旧版这里是「从一串 JSON 片段里挑一条」的下拉，已撤出界面并弃用：
+    // 其中 {"extra_body": ...} 在原始 HTTP 下永远不生效（extra_body 只是 Python SDK 的
+    // 包装，SDK 发送前会把它拆开），其余几条各只对一个供应商有效，选错时还没有任何反馈。
+    // 现在只发 OpenAI 官方的 reasoning_effort，取值与思源自己的 AI 设置一致。
+    let reasoning: HTMLSelectElement | undefined;
+    addField(setting, {
+        title: t("reasoningEffort"),
+        description: t("reasoningEffortDesc"),
+        build: () => {
+            const node = select();
+            const reasoningLabels: Record<ReasoningEffort, string> = {
+                [REASONING_EFFORT_OFF]: t("reasoningNone"),
+                [REASONING_DEFAULT]: t("reasoningDefault"),
+                low: t("reasoningLow"),
+                medium: t("reasoningMedium"),
+                high: t("reasoningHigh"),
+                xhigh: t("reasoningXHigh"),
+                max: t("reasoningMax"),
+            };
+            for (const value of REASONING_OPTIONS) {
+                const option = document.createElement("option");
+                option.value = value;
+                option.textContent = reasoningLabels[value];
+                node.append(option);
             }
-            availableModels = models;
-            // 拉完直接摊开，省得再点一次输入框
-            openModelMenu(modelInput, availableModels, t, setModel);
-        } catch (error) {
-            showMessage(t("testFailed", {message: error instanceof Error ? error.message : String(error)}), 12000, "error");
-        } finally {
-            fetchButton.disabled = false;
-            fetchButton.textContent = t("fetchModels");
+            node.addEventListener("change", () => {
+                api.reasoningEffort = node.value as ReasoningEffort;
+            });
+            reasoning = node;
+            return node;
+        },
+    });
+    syncs.push(() => {
+        if (reasoning) {
+            reasoning.value = api.reasoningEffort;
         }
     });
 
-    // 与「获取模型列表」同一行：两个按钮都在改/验同一个模型名，
-    // 分开两行时用户点完测试还要回头找输入框在哪（#18）
-    const testButton = document.createElement("button");
-    testButton.className = "b3-button b3-button--outline fn__flex-shrink";
-    testButton.textContent = t("testConnection");
-    testButton.addEventListener("click", async () => {
-        if (!hasProviderConfig(api)) {
-            showMessage(missingConfigMessage(), 6000, "error");
-            return;
-        }
-        testButton.disabled = true;
-        testButton.textContent = t("testRunning");
-        try {
-            const {reply, elapsed} = await testConnection(api, settings.behavior);
-            showMessage(t("testOk", {reply, elapsed}), 6000);
-        } catch (error) {
-            showMessage(
-                t("testFailed", {message: error instanceof Error ? error.message : String(error)}),
-                12000,
-                "error",
-            );
-        } finally {
-            testButton.disabled = false;
-            testButton.textContent = t("testConnection");
+    let temperature: HTMLInputElement | undefined;
+    addField(setting, {
+        title: t("temperature"),
+        description: t("temperatureDesc"),
+        build: () => {
+            const node = numberInput(0.1);
+            node.addEventListener("input", () => {
+                api.temperature = parseNumber(node.value, DEFAULT_SETTINGS.api.temperature);
+            });
+            temperature = node;
+            return node;
+        },
+    });
+    syncs.push(() => {
+        if (temperature) {
+            temperature.value = String(api.temperature);
         }
     });
 
-    const modelBox = document.createElement("div");
-    modelBox.className = "ai-title-settings__field-row";
-    modelBox.append(modelInput, fetchButton, testButton);
-    stackItem(items, t("modelName"), t("modelNameDesc"), modelBox);
-
-    const importButton = document.createElement("button");
-    importButton.className = "b3-button b3-button--outline";
-    importButton.textContent = t("importFromSiyuan");
-    importButton.addEventListener("click", () => {
-        openImportDialog(t, settings, () => syncs.forEach((sync) => sync()));
+    let topP: HTMLInputElement | undefined;
+    addField(setting, {
+        title: t("topP"),
+        description: t("topPDesc"),
+        build: () => {
+            const node = numberInput(0.05);
+            node.addEventListener("input", () => {
+                api.topP = parseOptionalNumber(node.value);
+            });
+            topP = node;
+            return node;
+        },
     });
-    const importRow = rowItem(items, t("importFromSiyuan"), t("importFromSiyuanDesc"), importButton);
+    syncs.push(() => {
+        if (topP) {
+            topP.value = api.topP === null ? "" : String(api.topP);
+        }
+    });
+
+    let topK: HTMLInputElement | undefined;
+    addField(setting, {
+        title: t("topK"),
+        description: t("topKDesc"),
+        build: () => {
+            const node = numberInput();
+            node.addEventListener("input", () => {
+                api.topK = parseOptionalNumber(node.value);
+            });
+            topK = node;
+            return node;
+        },
+    });
+    syncs.push(() => {
+        if (topK) {
+            topK.value = api.topK === null ? "" : String(api.topK);
+        }
+    });
+
+    let maxTokens: HTMLInputElement | undefined;
+    addField(setting, {
+        title: t("maxTokens"),
+        description: t("maxTokensDesc"),
+        build: () => {
+            const node = numberInput();
+            node.addEventListener("input", () => {
+                api.maxTokens = parseNumber(node.value, DEFAULT_SETTINGS.api.maxTokens);
+            });
+            maxTokens = node;
+            return node;
+        },
+    });
+    syncs.push(() => {
+        if (maxTokens) {
+            maxTokens.value = String(api.maxTokens);
+        }
+    });
 
     /**
      * 模式切换后重刷可见性，并重建供应商下拉。
@@ -637,20 +866,23 @@ function buildApiGroup(root: HTMLElement, t: T, settings: PluginSettings): Sync 
      * 输入框改成只读并显示思源实际会用的那个；「获取模型列表」也就没有意义了。
      */
     function refresh(): void {
-        fillProviderOptions(provider, api.siyuanProvider, t);
+        if (provider) {
+            fillProviderOptions(provider, api.siyuanProvider, t);
+        }
         const siyuan = siyuanMode();
         const follow = following();
-        baseURLRow.classList.toggle("fn__none", siyuan);
-        apiKeyRow.classList.toggle("fn__none", siyuan);
-        customHeadersRow.classList.toggle("fn__none", siyuan);
-        importRow.classList.toggle("fn__none", siyuan);
-        providerRow.classList.toggle("fn__none", !siyuan);
-        modelInput.disabled = follow;
-        modelInput.placeholder = follow ? followPlaceholder() : t("modelPlaceholder");
-        // 这一档没有可挑的模型，拉一份列表出来只会让人以为能改
-        fetchButton.classList.toggle("fn__none", follow);
-        // 模型名跟着模式换：两种模式各存各的，切换时输入框要显示对应那一个
-        modelInput.value = displayedModel();
+        hideRow(baseURLField, siyuan);
+        hideRow(apiKeyField, siyuan);
+        hideRow(customHeadersField, siyuan);
+        hideRow(importField, siyuan);
+        hideRow(providerField, !siyuan);
+        fetchButton?.classList.toggle("fn__none", follow);
+        if (modelInput) {
+            modelInput.disabled = follow;
+            modelInput.placeholder = follow ? followPlaceholder() : t("modelPlaceholder");
+            // 模型名跟着模式换：两种模式各存各的，切换时输入框要显示对应那一个
+            modelInput.value = displayedModel();
+        }
         if (follow) {
             availableModels = [];
         } else if (siyuan) {
@@ -662,70 +894,6 @@ function buildApiGroup(root: HTMLElement, t: T, settings: PluginSettings): Sync 
         }
     }
     syncs.push(refresh);
-
-    // 旧版这里是「从一串 JSON 片段里挑一条」的下拉，已撤出界面并弃用：
-    // 其中 {"extra_body": ...} 在原始 HTTP 下永远不生效（extra_body 只是 Python SDK 的
-    // 包装，SDK 发送前会把它拆开），其余几条各只对一个供应商有效，选错时还没有任何反馈。
-    // 现在只发 OpenAI 官方的 reasoning_effort，取值与思源自己的 AI 设置一致。
-    const reasoning = select();
-    const reasoningLabels: Record<ReasoningEffort, string> = {
-        [REASONING_EFFORT_OFF]: t("reasoningNone"),
-        [REASONING_DEFAULT]: t("reasoningDefault"),
-        low: t("reasoningLow"),
-        medium: t("reasoningMedium"),
-        high: t("reasoningHigh"),
-        xhigh: t("reasoningXHigh"),
-        max: t("reasoningMax"),
-    };
-    for (const value of REASONING_OPTIONS) {
-        const option = document.createElement("option");
-        option.value = value;
-        option.textContent = reasoningLabels[value];
-        reasoning.append(option);
-    }
-    reasoning.addEventListener("change", () => {
-        api.reasoningEffort = reasoning.value as ReasoningEffort;
-    });
-    syncs.push(() => {
-        reasoning.value = api.reasoningEffort;
-    });
-    rowItem(items, t("reasoningEffort"), t("reasoningEffortDesc"), reasoning);
-
-    const temperature = numberInput(0.1);
-    temperature.addEventListener("input", () => {
-        api.temperature = parseNumber(temperature.value, DEFAULT_SETTINGS.api.temperature);
-    });
-    syncs.push(() => {
-        temperature.value = String(api.temperature);
-    });
-    rowItem(items, t("temperature"), t("temperatureDesc"), temperature);
-
-    const topP = numberInput(0.05);
-    topP.addEventListener("input", () => {
-        api.topP = parseOptionalNumber(topP.value);
-    });
-    syncs.push(() => {
-        topP.value = api.topP === null ? "" : String(api.topP);
-    });
-    rowItem(items, t("topP"), t("topPDesc"), topP);
-
-    const topK = numberInput();
-    topK.addEventListener("input", () => {
-        api.topK = parseOptionalNumber(topK.value);
-    });
-    syncs.push(() => {
-        topK.value = api.topK === null ? "" : String(api.topK);
-    });
-    rowItem(items, t("topK"), t("topKDesc"), topK);
-
-    const maxTokens = numberInput();
-    maxTokens.addEventListener("input", () => {
-        api.maxTokens = parseNumber(maxTokens.value, DEFAULT_SETTINGS.api.maxTokens);
-    });
-    syncs.push(() => {
-        maxTokens.value = String(api.maxTokens);
-    });
-    rowItem(items, t("maxTokens"), t("maxTokensDesc"), maxTokens);
 
     return () => syncs.forEach((sync) => sync());
 }
@@ -797,7 +965,486 @@ function fillProviderOptions(node: HTMLSelectElement, selected: string, t: T): v
     node.value = selected;
 }
 
-/** 从思源自身的 AI 供应商配置里一次性复制 Base URL / API Key / 请求头 / 模型。 */
+function buildBehaviorGroup(setting: Setting, t: T, settings: PluginSettings): Sync {
+    addGroupTitle(setting, t("groupBehavior"));
+    const {behavior} = settings;
+    const syncs: Sync[] = [];
+
+    let timeout: HTMLInputElement | undefined;
+    addField(setting, {
+        title: t("timeout"),
+        description: t("timeoutDesc"),
+        build: () => {
+            const node = numberInput();
+            node.addEventListener("input", () => {
+                behavior.timeout = parseNumber(node.value, DEFAULT_SETTINGS.behavior.timeout);
+            });
+            timeout = node;
+            return node;
+        },
+    });
+    syncs.push(() => {
+        if (timeout) {
+            timeout.value = String(behavior.timeout);
+        }
+    });
+
+    let retries: HTMLInputElement | undefined;
+    addField(setting, {
+        title: t("retries"),
+        description: t("retriesDesc"),
+        build: () => {
+            const node = numberInput();
+            node.addEventListener("input", () => {
+                behavior.retries = parseNumber(node.value, DEFAULT_SETTINGS.behavior.retries);
+            });
+            retries = node;
+            return node;
+        },
+    });
+    syncs.push(() => {
+        if (retries) {
+            retries.value = String(behavior.retries);
+        }
+    });
+
+    let contentLimit: HTMLInputElement | undefined;
+    addField(setting, {
+        title: t("contentLimit"),
+        description: t("contentLimitDesc"),
+        build: () => {
+            const node = numberInput();
+            node.addEventListener("input", () => {
+                behavior.contentLimit = parseNumber(node.value, DEFAULT_SETTINGS.behavior.contentLimit);
+            });
+            contentLimit = node;
+            return node;
+        },
+    });
+    syncs.push(() => {
+        if (contentLimit) {
+            contentLimit.value = String(behavior.contentLimit);
+        }
+    });
+
+    let truncateMode: HTMLSelectElement | undefined;
+    addField(setting, {
+        title: t("truncateMode"),
+        description: t("truncateModeDesc"),
+        build: () => {
+            const node = select();
+            const truncateLabels: Record<TruncateMode, string> = {
+                [TRUNCATE_HEAD]: t("truncateHead"),
+                [TRUNCATE_TAIL]: t("truncateTail"),
+                [TRUNCATE_BOTH]: t("truncateBoth"),
+                [TRUNCATE_FULL]: t("truncateFull"),
+            };
+            for (const value of TRUNCATE_OPTIONS) {
+                const option = document.createElement("option");
+                option.value = value;
+                option.textContent = truncateLabels[value];
+                node.append(option);
+            }
+            node.addEventListener("change", () => {
+                behavior.truncateMode = node.value as TruncateMode;
+                syncRatio();
+            });
+            truncateMode = node;
+            return node;
+        },
+    });
+
+    // 比例必须紧跟在这条下拉下面：它只对「开头 + 末尾」一档有意义，
+    // 中间隔着别的设置项时，用户看不出它在描述谁
+    let headRatio: HTMLInputElement | undefined;
+    const ratioField = addField(setting, {
+        title: t("truncateHeadRatio"),
+        description: t("truncateHeadRatioDesc"),
+        build: () => {
+            const node = numberInput(0.05);
+            node.addEventListener("input", () => {
+                behavior.truncateHeadRatio = parseRatio(node.value, DEFAULT_SETTINGS.behavior.truncateHeadRatio);
+            });
+            headRatio = node;
+            return node;
+        },
+    });
+
+    // 只在「开头 + 末尾」下显示，其余档位留着一个不起作用的输入框只会让人猜
+    function syncRatio(): void {
+        hideRow(ratioField, behavior.truncateMode !== TRUNCATE_BOTH);
+    }
+
+    syncs.push(() => {
+        if (truncateMode) {
+            truncateMode.value = behavior.truncateMode;
+        }
+        if (headRatio) {
+            headRatio.value = String(behavior.truncateHeadRatio);
+        }
+        syncRatio();
+    });
+
+    let media: HTMLSelectElement | undefined;
+    addField(setting, {
+        title: t("mediaHandling"),
+        description: t("mediaHandlingDesc"),
+        build: () => {
+            const node = select();
+            const mediaLabels: Record<MediaMode, string> = {
+                [MEDIA_DROP]: t("mediaDrop"),
+                [MEDIA_PLACEHOLDER]: t("mediaPlaceholder"),
+                [MEDIA_RAW]: t("mediaRaw"),
+            };
+            for (const value of MEDIA_OPTIONS) {
+                const option = document.createElement("option");
+                option.value = value;
+                option.textContent = mediaLabels[value];
+                node.append(option);
+            }
+            node.addEventListener("change", () => {
+                behavior.mediaMode = node.value as MediaMode;
+            });
+            media = node;
+            return node;
+        },
+    });
+    syncs.push(() => {
+        if (media) {
+            media.value = behavior.mediaMode;
+        }
+    });
+
+    let includeTitle: HTMLInputElement | undefined;
+    addField(setting, {
+        title: t("includeTitle"),
+        description: t("includeTitleDesc"),
+        build: () => {
+            const node = switchControl();
+            node.addEventListener("change", () => {
+                behavior.includeTitle = node.checked;
+            });
+            includeTitle = node;
+            return node;
+        },
+    });
+    syncs.push(() => {
+        if (includeTitle) {
+            includeTitle.checked = behavior.includeTitle;
+        }
+    });
+
+    let tocMode: HTMLSelectElement | undefined;
+    addField(setting, {
+        title: t("tocMode"),
+        description: t("tocModeDesc"),
+        build: () => {
+            const node = select();
+            const tocLabels: Record<TocMode, string> = {
+                [TOC_NEVER]: t("tocNever"),
+                [TOC_TRUNCATED]: t("tocTruncated"),
+                [TOC_ALWAYS]: t("tocAlways"),
+            };
+            for (const value of TOC_OPTIONS) {
+                const option = document.createElement("option");
+                option.value = value;
+                option.textContent = tocLabels[value];
+                node.append(option);
+            }
+            node.addEventListener("change", () => {
+                behavior.tocMode = node.value as TocMode;
+            });
+            tocMode = node;
+            return node;
+        },
+    });
+    syncs.push(() => {
+        if (tocMode) {
+            tocMode.value = behavior.tocMode;
+        }
+    });
+
+    let batchSize: HTMLInputElement | undefined;
+    addField(setting, {
+        title: t("batchSize"),
+        description: t("batchSizeDesc"),
+        build: () => {
+            const node = numberInput();
+            node.addEventListener("input", () => {
+                behavior.batchSize = parsePositive(node.value, DEFAULT_SETTINGS.behavior.batchSize);
+            });
+            batchSize = node;
+            return node;
+        },
+    });
+    syncs.push(() => {
+        if (batchSize) {
+            batchSize.value = String(behavior.batchSize);
+        }
+    });
+
+    let concurrency: HTMLInputElement | undefined;
+    addField(setting, {
+        title: t("concurrency"),
+        description: t("concurrencyDesc"),
+        build: () => {
+            const node = numberInput();
+            node.addEventListener("input", () => {
+                behavior.concurrency = parsePositive(node.value, DEFAULT_SETTINGS.behavior.concurrency);
+            });
+            concurrency = node;
+            return node;
+        },
+    });
+    syncs.push(() => {
+        if (concurrency) {
+            concurrency.value = String(behavior.concurrency);
+        }
+    });
+
+    let autoApply: HTMLSelectElement | undefined;
+    addField(setting, {
+        title: t("autoApply"),
+        description: t("autoApplyDesc"),
+        build: () => {
+            const node = select();
+            const autoApplyLabels: Record<AutoApply, string> = {
+                [AUTO_APPLY_NEVER]: t("autoApplyNever"),
+                [AUTO_APPLY_SINGLE]: t("autoApplySingle"),
+                [AUTO_APPLY_ALWAYS]: t("autoApplyAlways"),
+            };
+            for (const value of AUTO_APPLY_OPTIONS) {
+                const option = document.createElement("option");
+                option.value = value;
+                option.textContent = autoApplyLabels[value];
+                node.append(option);
+            }
+            node.addEventListener("change", () => {
+                behavior.autoApply = node.value as AutoApply;
+            });
+            autoApply = node;
+            return node;
+        },
+    });
+    syncs.push(() => {
+        if (autoApply) {
+            autoApply.value = behavior.autoApply;
+        }
+    });
+
+    let language: HTMLInputElement | undefined;
+    addField(setting, {
+        title: t("titleLanguage"),
+        description: t("titleLanguageDesc"),
+        build: () => {
+            const node = input();
+            node.addEventListener("input", () => {
+                behavior.titleLanguage = node.value;
+            });
+            language = node;
+            return node;
+        },
+    });
+    syncs.push(() => {
+        if (language) {
+            language.value = behavior.titleLanguage;
+        }
+    });
+
+    let style: HTMLInputElement | undefined;
+    addField(setting, {
+        title: t("titleStyle"),
+        description: t("titleStyleDesc"),
+        build: () => {
+            const node = input();
+            node.addEventListener("input", () => {
+                behavior.titleStyle = node.value;
+            });
+            style = node;
+            return node;
+        },
+    });
+    syncs.push(() => {
+        if (style) {
+            style.value = behavior.titleStyle;
+        }
+    });
+
+    let ignoreInjection: HTMLInputElement | undefined;
+    addField(setting, {
+        title: t("ignoreInjection"),
+        description: t("ignoreInjectionDesc"),
+        build: () => {
+            const node = switchControl();
+            node.addEventListener("change", () => {
+                behavior.ignoreInjection = node.checked;
+            });
+            ignoreInjection = node;
+            return node;
+        },
+    });
+    syncs.push(() => {
+        if (ignoreInjection) {
+            ignoreInjection.checked = behavior.ignoreInjection;
+        }
+    });
+
+    let systemExtra: HTMLTextAreaElement | undefined;
+    addField(setting, {
+        title: t("systemExtra"),
+        description: t("systemExtraDesc"),
+        direction: "row",
+        build: () => {
+            const node = textarea(3);
+            node.addEventListener("input", () => {
+                behavior.systemExtra = node.value;
+            });
+            systemExtra = node;
+            return node;
+        },
+    });
+    syncs.push(() => {
+        if (systemExtra) {
+            systemExtra.value = behavior.systemExtra;
+        }
+    });
+
+    let userExtra: HTMLTextAreaElement | undefined;
+    addField(setting, {
+        title: t("userExtra"),
+        description: t("userExtraDesc"),
+        direction: "row",
+        build: () => {
+            const node = textarea(3);
+            node.addEventListener("input", () => {
+                behavior.userExtra = node.value;
+            });
+            userExtra = node;
+            return node;
+        },
+    });
+    syncs.push(() => {
+        if (userExtra) {
+            userExtra.value = behavior.userExtra;
+        }
+    });
+
+    return () => syncs.forEach((sync) => sync());
+}
+
+function buildExtensionGroup(setting: Setting, t: T, settings: PluginSettings): Sync {
+    addGroupTitle(setting, t("groupExtension"));
+    const {extension} = settings;
+    const syncs: Sync[] = [];
+
+    let autoTitleOnPaste: HTMLInputElement | undefined;
+    addField(setting, {
+        title: t("autoTitleOnPaste"),
+        description: t("autoTitleOnPasteDesc"),
+        build: () => {
+            const node = switchControl();
+            node.addEventListener("change", () => {
+                extension.autoTitleOnPaste = node.checked;
+            });
+            autoTitleOnPaste = node;
+            return node;
+        },
+    });
+    syncs.push(() => {
+        if (autoTitleOnPaste) {
+            autoTitleOnPaste.checked = extension.autoTitleOnPaste;
+        }
+    });
+
+    return () => syncs.forEach((sync) => sync());
+}
+
+function buildUiGroup(setting: Setting, t: T, settings: PluginSettings): Sync {
+    addGroupTitle(setting, t("groupUi"));
+    const {ui} = settings;
+    const syncs: Sync[] = [];
+
+    let topBar: HTMLInputElement | undefined;
+    addField(setting, {
+        title: t("showTopBar"),
+        description: t("showTopBarDesc"),
+        build: () => {
+            const node = switchControl();
+            node.addEventListener("change", () => {
+                ui.showTopBar = node.checked;
+            });
+            topBar = node;
+            return node;
+        },
+    });
+    syncs.push(() => {
+        if (topBar) {
+            topBar.checked = ui.showTopBar;
+        }
+    });
+
+    let breadcrumb: HTMLInputElement | undefined;
+    addField(setting, {
+        title: t("showBreadcrumb"),
+        description: t("showBreadcrumbDesc"),
+        build: () => {
+            const node = switchControl();
+            node.addEventListener("change", () => {
+                ui.showBreadcrumb = node.checked;
+            });
+            breadcrumb = node;
+            return node;
+        },
+    });
+    syncs.push(() => {
+        if (breadcrumb) {
+            breadcrumb.checked = ui.showBreadcrumb;
+        }
+    });
+
+    let docTree: HTMLInputElement | undefined;
+    addField(setting, {
+        title: t("showDocTreeMenu"),
+        description: t("showDocTreeMenuDesc"),
+        build: () => {
+            const node = switchControl();
+            node.addEventListener("change", () => {
+                ui.showDocTreeMenu = node.checked;
+            });
+            docTree = node;
+            return node;
+        },
+    });
+    syncs.push(() => {
+        if (docTree) {
+            docTree.checked = ui.showDocTreeMenu;
+        }
+    });
+
+    let debugSwitch: HTMLInputElement | undefined;
+    addField(setting, {
+        title: t("debugMode"),
+        description: t("debugModeDesc"),
+        build: () => {
+            const node = switchControl();
+            node.addEventListener("change", () => {
+                ui.debug = node.checked;
+                // 立即生效，不必等保存后才能看到日志
+                setDebug(node.checked);
+            });
+            debugSwitch = node;
+            return node;
+        },
+    });
+    syncs.push(() => {
+        if (debugSwitch) {
+            debugSwitch.checked = ui.debug;
+        }
+    });
+
+    return () => syncs.forEach((sync) => sync());
+}
+
 function openImportDialog(t: T, settings: PluginSettings, onImported: () => void): void {
     const providers = readSiyuanProviders().filter((provider) =>
         (provider.baseURL ?? "") !== "" &&
@@ -808,12 +1455,30 @@ function openImportDialog(t: T, settings: PluginSettings, onImported: () => void
         return;
     }
 
+    // 导入窗是叠在设置面板之上的第二层弹窗（#46）。宿主 `Dialog` 构造时把当前焦点元素记成
+    // `previousFocus`，关闭后再 `focus()` 回去（app/src/dialog/index.ts），而 App 把
+    // `HTMLElement.prototype.focus` 重写成经原生桥接唤起软键盘：关窗那一刻弹键盘会让
+    // WebView 重排，真机上表现为卡一下、甚至重载前端。
+    // 先把焦点交给 body，再让宿主不留可恢复的目标 —— 关掉导入窗时不会再隐式聚焦面板里的控件。
+    // 只改移动端：桌面端没有这条原生桥接，焦点照常还回去，键盘导航不受影响。
+    const frontend = getFrontend();
+    const mobile = frontend === "mobile" || frontend === "browser-mobile";
+    if (mobile) {
+        const active = document.activeElement;
+        if (active instanceof HTMLElement && active !== document.body) {
+            active.blur();
+        }
+    }
+
     const dialog = new Dialog({
         title: t("importDialogTitle"),
         width: "640px",
         content: '<div class="b3-dialog__content"><div class="ai-title__importing"></div></div>',
     });
     preheatPanel(dialog);
+    if (mobile) {
+        skipFocusRestore(dialog);
+    }
     const body = dialog.element.querySelector<HTMLElement>(".ai-title__importing");
     if (!body) {
         return;
@@ -871,255 +1536,4 @@ function openImportDialog(t: T, settings: PluginSettings, onImported: () => void
         item.append(text, choose);
         body.append(item);
     }
-}
-
-function buildBehaviorGroup(root: HTMLElement, t: T, settings: PluginSettings): Sync {
-    const items = createGroup(root, t("groupBehavior"));
-    const {behavior} = settings;
-    const syncs: Sync[] = [];
-
-    const timeout = numberInput();
-    timeout.addEventListener("input", () => {
-        behavior.timeout = parseNumber(timeout.value, DEFAULT_SETTINGS.behavior.timeout);
-    });
-    syncs.push(() => {
-        timeout.value = String(behavior.timeout);
-    });
-    rowItem(items, t("timeout"), t("timeoutDesc"), timeout);
-
-    const retries = numberInput();
-    retries.addEventListener("input", () => {
-        behavior.retries = parseNumber(retries.value, DEFAULT_SETTINGS.behavior.retries);
-    });
-    syncs.push(() => {
-        retries.value = String(behavior.retries);
-    });
-    rowItem(items, t("retries"), t("retriesDesc"), retries);
-
-    const contentLimit = numberInput();
-    contentLimit.addEventListener("input", () => {
-        behavior.contentLimit = parseNumber(contentLimit.value, DEFAULT_SETTINGS.behavior.contentLimit);
-    });
-    syncs.push(() => {
-        contentLimit.value = String(behavior.contentLimit);
-    });
-    rowItem(items, t("contentLimit"), t("contentLimitDesc"), contentLimit);
-
-    const truncateMode = select();
-    const truncateLabels: Record<TruncateMode, string> = {
-        [TRUNCATE_HEAD]: t("truncateHead"),
-        [TRUNCATE_TAIL]: t("truncateTail"),
-        [TRUNCATE_BOTH]: t("truncateBoth"),
-        [TRUNCATE_FULL]: t("truncateFull"),
-    };
-    for (const value of TRUNCATE_OPTIONS) {
-        const option = document.createElement("option");
-        option.value = value;
-        option.textContent = truncateLabels[value];
-        truncateMode.append(option);
-    }
-    truncateMode.addEventListener("change", () => {
-        behavior.truncateMode = truncateMode.value as TruncateMode;
-        syncRatio();
-    });
-    syncs.push(() => {
-        truncateMode.value = behavior.truncateMode;
-        headRatio.value = String(behavior.truncateHeadRatio);
-        syncRatio();
-    });
-    rowItem(items, t("truncateMode"), t("truncateModeDesc"), truncateMode);
-
-    // 比例必须紧跟在这条下拉下面：它只对「开头 + 末尾」一档有意义，
-    // 中间隔着别的设置项时，用户看不出它在描述谁
-    const headRatio = numberInput(0.05);
-    headRatio.addEventListener("input", () => {
-        behavior.truncateHeadRatio = parseRatio(headRatio.value, DEFAULT_SETTINGS.behavior.truncateHeadRatio);
-    });
-    const ratioRow = rowItem(items, t("truncateHeadRatio"), t("truncateHeadRatioDesc"), headRatio);
-
-    // 只在「开头 + 末尾」下显示，其余档位留着一个不起作用的输入框只会让人猜
-    function syncRatio(): void {
-        ratioRow.classList.toggle("fn__none", behavior.truncateMode !== TRUNCATE_BOTH);
-    }
-
-    const media = select();
-    const mediaLabels: Record<MediaMode, string> = {
-        [MEDIA_DROP]: t("mediaDrop"),
-        [MEDIA_PLACEHOLDER]: t("mediaPlaceholder"),
-        [MEDIA_RAW]: t("mediaRaw"),
-    };
-    for (const value of MEDIA_OPTIONS) {
-        const option = document.createElement("option");
-        option.value = value;
-        option.textContent = mediaLabels[value];
-        media.append(option);
-    }
-    media.addEventListener("change", () => {
-        behavior.mediaMode = media.value as MediaMode;
-    });
-    syncs.push(() => {
-        media.value = behavior.mediaMode;
-    });
-    rowItem(items, t("mediaHandling"), t("mediaHandlingDesc"), media);
-
-    const includeTitle = switchControl();
-    includeTitle.addEventListener("change", () => {
-        behavior.includeTitle = includeTitle.checked;
-    });
-    syncs.push(() => {
-        includeTitle.checked = behavior.includeTitle;
-    });
-    rowItem(items, t("includeTitle"), t("includeTitleDesc"), includeTitle);
-
-    const tocMode = select();
-    const tocLabels: Record<TocMode, string> = {
-        [TOC_NEVER]: t("tocNever"),
-        [TOC_TRUNCATED]: t("tocTruncated"),
-        [TOC_ALWAYS]: t("tocAlways"),
-    };
-    for (const value of TOC_OPTIONS) {
-        const option = document.createElement("option");
-        option.value = value;
-        option.textContent = tocLabels[value];
-        tocMode.append(option);
-    }
-    tocMode.addEventListener("change", () => {
-        behavior.tocMode = tocMode.value as TocMode;
-    });
-    syncs.push(() => {
-        tocMode.value = behavior.tocMode;
-    });
-    rowItem(items, t("tocMode"), t("tocModeDesc"), tocMode);
-
-    const batchSize = numberInput();
-    batchSize.addEventListener("input", () => {
-        behavior.batchSize = parsePositive(batchSize.value, DEFAULT_SETTINGS.behavior.batchSize);
-    });
-    syncs.push(() => {
-        batchSize.value = String(behavior.batchSize);
-    });
-    rowItem(items, t("batchSize"), t("batchSizeDesc"), batchSize);
-
-    const concurrency = numberInput();
-    concurrency.addEventListener("input", () => {
-        behavior.concurrency = parsePositive(concurrency.value, DEFAULT_SETTINGS.behavior.concurrency);
-    });
-    syncs.push(() => {
-        concurrency.value = String(behavior.concurrency);
-    });
-    rowItem(items, t("concurrency"), t("concurrencyDesc"), concurrency);
-
-    const autoApply = select();
-    const autoApplyLabels: Record<AutoApply, string> = {
-        [AUTO_APPLY_NEVER]: t("autoApplyNever"),
-        [AUTO_APPLY_SINGLE]: t("autoApplySingle"),
-        [AUTO_APPLY_ALWAYS]: t("autoApplyAlways"),
-    };
-    for (const value of AUTO_APPLY_OPTIONS) {
-        const option = document.createElement("option");
-        option.value = value;
-        option.textContent = autoApplyLabels[value];
-        autoApply.append(option);
-    }
-    autoApply.addEventListener("change", () => {
-        behavior.autoApply = autoApply.value as AutoApply;
-    });
-    syncs.push(() => {
-        autoApply.value = behavior.autoApply;
-    });
-
-    rowItem(items, t("autoApply"), t("autoApplyDesc"), autoApply);
-
-    const language = input();
-    language.addEventListener("input", () => {
-        behavior.titleLanguage = language.value;
-    });
-    syncs.push(() => {
-        language.value = behavior.titleLanguage;
-    });
-    rowItem(items, t("titleLanguage"), t("titleLanguageDesc"), language);
-
-    const style = input();
-    style.addEventListener("input", () => {
-        behavior.titleStyle = style.value;
-    });
-    syncs.push(() => {
-        style.value = behavior.titleStyle;
-    });
-    rowItem(items, t("titleStyle"), t("titleStyleDesc"), style);
-
-    const ignoreInjection = switchControl();
-    ignoreInjection.addEventListener("change", () => {
-        behavior.ignoreInjection = ignoreInjection.checked;
-    });
-    syncs.push(() => {
-        ignoreInjection.checked = behavior.ignoreInjection;
-    });
-    rowItem(items, t("ignoreInjection"), t("ignoreInjectionDesc"), ignoreInjection);
-
-    const systemExtra = textarea(3);
-    systemExtra.addEventListener("input", () => {
-        behavior.systemExtra = systemExtra.value;
-    });
-    syncs.push(() => {
-        systemExtra.value = behavior.systemExtra;
-    });
-    stackItem(items, t("systemExtra"), t("systemExtraDesc"), systemExtra);
-
-    const userExtra = textarea(3);
-    userExtra.addEventListener("input", () => {
-        behavior.userExtra = userExtra.value;
-    });
-    syncs.push(() => {
-        userExtra.value = behavior.userExtra;
-    });
-    stackItem(items, t("userExtra"), t("userExtraDesc"), userExtra);
-
-    return () => syncs.forEach((sync) => sync());
-}
-
-function buildUiGroup(root: HTMLElement, t: T, settings: PluginSettings): Sync {
-    const items = createGroup(root, t("groupUi"));
-    const {ui} = settings;
-    const syncs: Sync[] = [];
-
-    const topBar = switchControl();
-    topBar.addEventListener("change", () => {
-        ui.showTopBar = topBar.checked;
-    });
-    syncs.push(() => {
-        topBar.checked = ui.showTopBar;
-    });
-    rowItem(items, t("showTopBar"), t("showTopBarDesc"), topBar);
-
-    const breadcrumb = switchControl();
-    breadcrumb.addEventListener("change", () => {
-        ui.showBreadcrumb = breadcrumb.checked;
-    });
-    syncs.push(() => {
-        breadcrumb.checked = ui.showBreadcrumb;
-    });
-    rowItem(items, t("showBreadcrumb"), t("showBreadcrumbDesc"), breadcrumb);
-
-    const docTree = switchControl();
-    docTree.addEventListener("change", () => {
-        ui.showDocTreeMenu = docTree.checked;
-    });
-    syncs.push(() => {
-        docTree.checked = ui.showDocTreeMenu;
-    });
-    rowItem(items, t("showDocTreeMenu"), t("showDocTreeMenuDesc"), docTree);
-
-    const debugSwitch = switchControl();
-    debugSwitch.addEventListener("change", () => {
-        ui.debug = debugSwitch.checked;
-        // 立即生效，不必等保存后才能看到日志
-        setDebug(debugSwitch.checked);
-    });
-    syncs.push(() => {
-        debugSwitch.checked = ui.debug;
-    });
-    rowItem(items, t("debugMode"), t("debugModeDesc"), debugSwitch);
-
-    return () => syncs.forEach((sync) => sync());
 }

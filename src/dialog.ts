@@ -115,14 +115,36 @@ function reportApplyFailures(
 }
 
 /**
- * 给面板挂上私有类名，样式里据此常驻 `will-change: transform`（见 index.scss）。
+ * 给对话框外壳挂上私有类名，样式里据此常驻 `will-change: transform`（见 index.scss）。
  *
- * 面板在移动端几乎铺满屏幕，入场走的仍是思源自己的 scale + 淡入过渡：不预热合成层时，
- * 入场那几帧要新建图层，App 的 WebView 会在面板四周留一帧旧画面。`will-change` 只声明
- * 这个元素会变 transform，不改过渡也不改透明度，宿主动画原样保留。
+ * 宿主的 `.b3-dialog__container` 用 `transform: scale(.8)` + `opacity: 0` 淡入，`.b3-dialog__scrim`
+ * 同时淡入遮罩：过渡的起点与终点浏览器都要新建、销毁合成层，而 App 的 WebView 在拆层那一帧
+ * 只能提交旧的页面纹理，面板打开时就插一帧旧画面（移动端上尤其明显，面板几乎铺满屏幕）。
+ * 这里在加入场类之前就挂上私有类，让图层在过渡开始前已经存在，入场只改它的属性。
+ *
+ * 只加图层提示，不覆盖宿主的 `transition`，也不改 `b3-dialog--open` 的切换时序。
+ *
+ * 宿主 `Dialog` 本身有 `containerClassName` 选项，但 `siyuan` 包里还没有这个字段的类型声明
+ * （见 minAppVersion 对应的 app/src/dialog/index.ts），所以按构造完立即补类的写法处理，
+ * 不给全项目扩散类型断言。
  */
 export function preheatPanel(dialog: Dialog): void {
     dialog.element.querySelector<HTMLElement>(".b3-dialog__container")?.classList.add("ai-title__panel");
+}
+
+/**
+ * 关窗时不把焦点还给打开前的元素（#46）。
+ *
+ * 宿主 `Dialog` 构造时把当前焦点元素记成 `previousFocus`，`destroy()` 之后再 `focus()` 回去
+ * （app/src/dialog/index.ts）。移动端 App 又把 `HTMLElement.prototype.focus` 改写成经原生桥接
+ * 唤起软键盘（app/src/mobile/index.ts）：在设置面板之上再关一层弹窗时，这一下没人要的键盘
+ * 会改掉 WebView 高度并整页重排，真机上表现为卡一下、偶发重载前端。
+ *
+ * 该字段在 `siyuan` 包里没有类型声明，只为这一处做窄类型扩展，不扩散成全局断言。
+ * 宿主改名时这里静默失效，代价只是焦点回到 body，不会连带其它行为。
+ */
+export function skipFocusRestore(dialog: Dialog): void {
+    (dialog as Dialog & {previousFocus?: HTMLElement}).previousFocus = undefined;
 }
 
 export function openGenerateDialog(options: GenerateDialogOptions): void {
@@ -138,6 +160,7 @@ export function openGenerateDialog(options: GenerateDialogOptions): void {
         content: '<div class="b3-dialog__content"><div class="ai-title__dialog"></div></div>' +
             '<div class="b3-dialog__action"></div>',
     });
+    // 正文全在下面同步拼完，入场期间不再插入、替换任何内容
     preheatPanel(dialog);
 
     const body = dialog.element.querySelector<HTMLElement>(".ai-title__dialog");
