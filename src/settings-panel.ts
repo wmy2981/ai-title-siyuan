@@ -430,6 +430,7 @@ export function openSettingsPanel(options: SettingsPanelOptions): void {
     const syncs = [
         buildApiGroup(setting, t, settings),
         buildBehaviorGroup(setting, t, settings),
+        buildExtensionGroup(setting, t, settings),
         buildUiGroup(setting, t, settings),
     ];
 
@@ -1325,6 +1326,33 @@ function buildBehaviorGroup(setting: Setting, t: T, settings: PluginSettings): S
     syncs.push(() => {
         if (userExtra) {
             userExtra.value = behavior.userExtra;
+        }
+    });
+
+    return () => syncs.forEach((sync) => sync());
+}
+
+function buildExtensionGroup(setting: Setting, t: T, settings: PluginSettings): Sync {
+    addGroupTitle(setting, t("groupExtension"));
+    const {extension} = settings;
+    const syncs: Sync[] = [];
+
+    let autoTitleOnPaste: HTMLInputElement | undefined;
+    addField(setting, {
+        title: t("autoTitleOnPaste"),
+        description: t("autoTitleOnPasteDesc"),
+        build: () => {
+            const node = switchControl();
+            node.addEventListener("change", () => {
+                extension.autoTitleOnPaste = node.checked;
+            });
+            autoTitleOnPaste = node;
+            return node;
+        },
+    });
+    syncs.push(() => {
+        if (autoTitleOnPaste) {
+            autoTitleOnPaste.checked = extension.autoTitleOnPaste;
         }
     });
 

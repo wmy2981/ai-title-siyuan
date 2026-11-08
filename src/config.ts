@@ -1,7 +1,7 @@
 /**
  * 插件配置的类型定义、默认值与持久化读写。
  *
- * 配置分三组，与设置页的三个分区一一对应：接口、行为、界面。
+ * 配置分四组，与设置页的四个分区一一对应：接口、行为、拓展、界面。
  * 所有字段都必须有默认值：读回来的配置会与默认值合并，
  * 这样旧版本存下的配置在新增字段后依然可用。
  */
@@ -281,9 +281,25 @@ export interface UiSettings {
     debug: boolean;
 }
 
+/**
+ * 拓展：在接口、行为、界面之外另加的附加能力（#47）。
+ *
+ * 与三组既有配置分开的不是「作用范围」而是「触发方式」——这一组都由思源里的事件自己发起，
+ * 不需要用户点插件的入口。独立成组也让后面同类能力有地方放，不必硬塞进行为配置。
+ */
+export interface ExtensionSettings {
+    /**
+     * 往空白笔记里粘贴内容后自动生成标题（#47）。
+     *
+     * 默认关闭：这一条会在用户没有点任何插件入口的情况下改写文档标题。
+     */
+    autoTitleOnPaste: boolean;
+}
+
 export interface PluginSettings {
     api: ApiSettings;
     behavior: BehaviorSettings;
+    extension: ExtensionSettings;
     ui: UiSettings;
 }
 
@@ -377,6 +393,9 @@ export const DEFAULT_SETTINGS: PluginSettings = {
         systemExtra: "",
         userExtra: "",
     },
+    extension: {
+        autoTitleOnPaste: false,
+    },
     ui: {
         showTopBar: true,
         showBreadcrumb: false,
@@ -452,6 +471,7 @@ export function mergeSettings(stored: unknown): PluginSettings {
     return {
         api,
         behavior,
+        extension: {...DEFAULT_SETTINGS.extension, ...(raw.extension ?? {})},
         ui: {...DEFAULT_SETTINGS.ui, ...(raw.ui ?? {})},
     };
 }

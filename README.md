@@ -22,6 +22,7 @@ This plugin does the naming pass for you. It reads each note's content, asks a m
 - **Use a provider configured in SiYuan directly.** What a fresh install starts on: the protocol, address, key and headers all come from that entry in SiYuan.
 - **Set the thinking effort.** Pick a level from disabled up to maximum, or send nothing and leave it to the provider.
 - **The API key is encrypted at rest.** It is sealed with SiYuan's own data repo key. Without one it is stored in plain text and the settings panel says so.
+- **Name pasted notes.** Paste content into a note that is still unnamed and empty and it gets a title right away. Off by default.
 
 ## Requirements
 
@@ -96,6 +97,15 @@ Bulk-renaming documents is destructive and SiYuan's rename has no undo stack. **
 
 Titles may contain inline Markdown. On SiYuan 3.8.10 and later a title with inline Markdown is written as a rich-text title source, so bold, italic, strikethrough, highlight, superscript, subscript, code, underline, keyboard and links render as such; a plain-title document is upgraded to the rich format when that happens (older SiYuan clients may not read that document), and stays plain — a plain rename — when the title has no Markdown. Underline and keyboard have no Markdown syntax, so `<u>` and `<kbd>` are the only raw HTML tags passed through; every other tag stays literal text. Older SiYuan versions cannot store rich titles, so the markers are stripped before renaming there. When the generated text matches the current title text the title is left untouched; otherwise the whole title is replaced with the generated one.
 
+### Notes you paste into
+
+Off by default, switched on under **Extensions**. Once enabled, pasting content into a note that has neither a body nor a title yet asks for a title as soon as the content settles, and writes it back to that note — no review dialog.
+
+- Both conditions are required: the body is empty **and** the note is unnamed. A note you already named keeps its title even when its body is empty.
+- This path **ignores Apply titles automatically**: the title is written straight away.
+- Only the state before the paste counts. A note with content, or one holding just an image, link or embed, is not empty.
+- Pasting several pieces in a row produces a single title, and only after you stop pasting.
+
 ## Usage
 
 Four entry points, all doing the same thing:
@@ -104,6 +114,8 @@ Four entry points, all doing the same thing:
 - The **breadcrumb button** in the editor does the same.
 - **Right-click notes in the document tree** to name one or many. This is the bulk path.
 - The **command palette** has _Generate title with AI_.
+
+Pasting into an empty note is a fifth path, and the only one that never asks: see [Notes you paste into](#notes-you-paste-into).
 
 ## Troubleshooting
 

@@ -230,17 +230,45 @@ function hasSubstance(text: string, customTokens: readonly string[]): boolean {
     return /[\p{L}\p{N}]/u.test(plain);
 }
 
-/** 取一篇文档当前的标题，用于确认窗口的对比展示。 */
-export async function getDocTitle(id: string): Promise<string> {
+/**
+ * 「这篇文档还没有标题」的标记，思源记在文档自己的 IAL 上
+ * （内核 treenode/document_title.go 的 DocumentTitleEmptyAttr）。
+ *
+ * 新建文档、以及把标题清空时标上，用户起过名字就摘掉。不能拿标题文字去比「Untitled」：
+ * 新建文档名可以配置模板，占位文字本身也随界面语言变（内核 Conf.language(16)）。
+ */
+const TITLE_EMPTY_ATTR = "custom-sy-title-empty";
+
+/** /api/block/getDocInfo 的返回，只取这里用得到的字段。 */
+interface DocInfo {
+    title: string;
+    /** 文档是否还没有标题，见 TITLE_EMPTY_ATTR。 */
+    titleEmpty: boolean;
+}
+
+async function readDocInfo(id: string): Promise<DocInfo> {
     const response = (await fetchSyncPost("/api/block/getDocInfo", {id})) as {
         code: number;
         msg: string;
-        data?: {name?: string};
+        data?: {name?: string; ial?: Record<string, string>};
     };
     if (response.code !== 0) {
         throw new Error(response.msg || `Failed to read document info for ${id}`);
     }
-    return response.data?.name ?? "";
+    return {
+        title: response.data?.name ?? "",
+        titleEmpty: response.data?.ial?.[TITLE_EMPTY_ATTR] === "true",
+    };
+}
+
+/** 取一篇文档当前的标题，用于确认窗口的对比展示。 */
+export async function getDocTitle(id: string): Promise<string> {
+    return (await readDocInfo(id)).title;
+}
+
+/** 这篇文档是不是还没有标题（#47）：只对没被命名过的文档自动生成标题。 */
+export async function isDocTitleEmpty(id: string): Promise<boolean> {
+    return (await readDocInfo(id)).titleEmpty;
 }
 
 /** 标题只是补充信息，取不到就当作没有，不让整篇笔记跟着失败。 */

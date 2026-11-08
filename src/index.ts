@@ -1,8 +1,8 @@
 /**
  * AI 标题生成插件入口。
  *
- * 四个入口最终都汇聚到 runGeneration：
- * 顶栏按钮、编辑器面包屑按钮、文档树右键菜单、命令面板。
+ * 所有入口最终都汇聚到 runGeneration：
+ * 顶栏按钮、编辑器面包屑按钮、文档树右键菜单、命令面板，以及空白笔记粘贴后的自动生成（#47）。
  */
 import {getActiveEditor, Plugin, showMessage, hideMessage} from "siyuan";
 import type {ICommandContext, IMenu, IProtyle, TEventBus} from "siyuan";
@@ -18,10 +18,11 @@ import {
     STORAGE_NAME,
     type PluginSettings,
 } from "./config";
-import {getDocTitle} from "./content";
-import {debug, debugJson, setDebug} from "./debug";
+import {getDocTitle, isDocTitleEmpty} from "./content";
+import {debug, debugError, debugJson, setDebug} from "./debug";
 import {loadDeviceSelection, saveDeviceSelection, withoutDeviceState} from "./device-store";
 import {makeT, type T} from "./i18n";
+import {isBlankEditor, watchPastedNote} from "./paste";
 import {generateTitles, type GenerateOutcome, type NoteResult} from "./pipeline";
 import {sealSettings, unsealSettings} from "./secret";
 import {openSettingsPanel} from "./settings-panel";
@@ -53,6 +54,12 @@ export default class AiTitlePlugin extends Plugin {
      * 那既重复花钱，又会在最后弹出第二个确认窗口。
      */
     private generating = false;
+    /**
+     * 正在等内容落地的粘贴：文档 id → 取消函数（#47）。
+     *
+     * 用 Map 而不是一个字段：连续往几篇空白笔记里各粘一次时，两篇都该拿到标题。
+     */
+    private readonly pasteWatches = new Map<string, () => void>();
 
     async onload(): Promise<void> {
         this.t = makeT(this.i18n);
@@ -60,6 +67,7 @@ export default class AiTitlePlugin extends Plugin {
         this.addIcons(ICON_SVG);
         this.registerCommand();
         this.registerDocTreeMenu();
+        this.registerPasteWatch();
     }
 
     async onLayoutReady(): Promise<void> {
@@ -75,6 +83,7 @@ export default class AiTitlePlugin extends Plugin {
 
     async onunload(): Promise<void> {
         debug("Plugin unloaded");
+        this.stopPasteWatches();
         this.removeTopBarEntry();
         this.removeBreadcrumbEntry();
     }
@@ -324,8 +333,85 @@ export default class AiTitlePlugin extends Plugin {
         this.eventBus.on("open-menu-doctree" as TEventBus, handler as (event: CustomEvent<unknown>) => void);
     }
 
-    /** 四个入口共用的执行路径：取正文 → 并发请求 → 弹窗或直接应用。 */
-    private async runGeneration(ids: string[], source: string): Promise<void> {
+    /**
+     * 空白笔记粘贴内容后自动生成标题（#47）。
+     *
+     * 订阅始终都在，开关在事件里现读 —— 与文档树右键菜单同一个做法。
+     * 监听器不调用 `resolve()`，粘贴照旧由思源自己处理：这里只是顺路看一眼。
+     */
+    private registerPasteWatch(): void {
+        this.eventBus.on("paste", (event) => {
+            if (!this.settings.extension.autoTitleOnPaste) {
+                return;
+            }
+            try {
+                this.watchPaste(event.detail.protyle);
+            } catch (error) {
+                // 这里抛错会打断思源自己的粘贴流程，一律吞掉
+                debugError("Failed to watch the pasted note", error);
+            }
+        });
+    }
+
+    /**
+     * 粘贴前是一篇「还没起名字的空笔记」时盯住它，等内容落地再生成标题。
+     *
+     * 两个条件缺一不可（#47）：正文是空的，**并且**这篇文档还没有标题。
+     * 两个都只认粘贴那一刻的状态 —— 内容落地之后编辑器当然不空了；
+     * 标题虽然不会因为粘贴而改变，也在这里一并定下来，免得半路改主意。
+     */
+    private watchPaste(protyle: IProtyle): void {
+        const id = protyle.block?.rootID ?? "";
+        const editor = protyle.wysiwyg?.element;
+        if (id === "" || !editor) {
+            return;
+        }
+        // 同一篇已经盯上了：那一次会等到用户停手再生成，不必另起一份
+        if (this.pasteWatches.has(id)) {
+            return;
+        }
+        // 粘贴前正文里已经有内容，就不是「往空白笔记里粘贴」
+        if (!isBlankEditor(editor)) {
+            return;
+        }
+        // 标题不会因为粘贴而改变，所以这一条可以异步问内核；
+        // 问不出来时按「已经有标题」处理，宁可不改名
+        const untitled = isDocTitleEmpty(id).catch((error) => {
+            debugError(`Failed to read the title state of ${id}`, error);
+            return false;
+        });
+        debug(`Paste into the blank note ${id}, waiting for the content to land`);
+        const stop = watchPastedNote(editor, (content) => {
+            this.pasteWatches.delete(id);
+            if (!content) {
+                debug(`Gave up waiting for the pasted content in ${id}`);
+                return;
+            }
+            void untitled.then((empty) => {
+                if (!empty) {
+                    debug(`Note ${id} already has a title, keeping it`);
+                    return;
+                }
+                debug(`Pasted content landed in the untitled note ${id}, generating a title`);
+                // 第三个参数：不看「自动应用标题」，直接写回（#47）
+                void this.runGeneration([id], "paste", true);
+            });
+        });
+        this.pasteWatches.set(id, stop);
+    }
+
+    private stopPasteWatches(): void {
+        this.pasteWatches.forEach((stop) => stop());
+        this.pasteWatches.clear();
+    }
+
+    /**
+     * 各入口共用的执行路径：取正文 → 并发请求 → 弹窗或直接应用。
+     *
+     * `applyImmediately` 只由「空白笔记粘贴后自动生成」用（#47）：那条路径不给确认窗口，
+     * 也不看「自动应用标题」设置 —— 用户已经把内容粘贴进来，意图是明确的。
+     */
+    private async runGeneration(ids: string[], source: string, applyImmediately = false): Promise<void> {
         const {api, behavior} = this.settings;
         // 闸在第一个 await 之前落下：慢的是网络，重复点击往往正发生在这一段
         if (this.generating) {
@@ -357,7 +443,7 @@ export default class AiTitlePlugin extends Plugin {
             });
             hideMessage(PROGRESS_ID);
             this.reportIneffectiveReasoning(outcome.reasoning);
-            await this.handleOutcome(ids, outcome.results, outcome.batchErrors);
+            await this.handleOutcome(ids, outcome.results, outcome.batchErrors, applyImmediately);
         } catch (error) {
             hideMessage(PROGRESS_ID);
             const message = error instanceof Error ? error.message : String(error);
@@ -369,7 +455,12 @@ export default class AiTitlePlugin extends Plugin {
         }
     }
 
-    private async handleOutcome(ids: string[], results: NoteResult[], batchErrors: string[]): Promise<void> {
+    private async handleOutcome(
+        ids: string[],
+        results: NoteResult[],
+        batchErrors: string[],
+        applyImmediately: boolean,
+    ): Promise<void> {
         const notes = await this.collectNoteInfo(ids);
         const generated = results.filter((result) => result.title !== undefined);
         debug(`Generation finished: ${generated.length}/${ids.length} title(s) produced`);
@@ -378,6 +469,14 @@ export default class AiTitlePlugin extends Plugin {
         }
 
         if (generated.length === 0) {
+            this.reportFailures(results, notes);
+            return;
+        }
+
+        // 粘贴后自动生成是用户已经表达过的意图：直接写回，不看「自动应用标题」设置（#47）
+        if (applyImmediately) {
+            debug("Paste-triggered generation: writing the title back without the review dialog");
+            await applyGeneratedSilently(this.t, results, notes);
             this.reportFailures(results, notes);
             return;
         }
