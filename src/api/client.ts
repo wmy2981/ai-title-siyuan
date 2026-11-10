@@ -9,8 +9,8 @@
  * 各协议发什么、怎么读响应都在 protocol.ts，这里不认协议。
  */
 import {fetchSyncPost} from "siyuan";
-import {type ApiSettings, type BehaviorSettings} from "../config";
-import {debug, debugError, debugModelText, debugRequest, debugResponse} from "../debug";
+import {type ApiSettings, type BehaviorSettings} from "../core/config";
+import {debug, debugError, debugModelText, debugRequest, debugResponse} from "../core/debug";
 import {withCustomHeaders} from "./headers";
 import {
     adapterFor,

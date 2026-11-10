@@ -10,15 +10,15 @@
  * 存进去的配置看上去就像根本没保存成功。
  */
 import {Dialog, getFrontend, Menu, Setting, showMessage} from "siyuan";
-import {parseCustomHeaders} from "./api/headers";
-import {listModels, testConnection} from "./api/client";
+import {parseCustomHeaders} from "../api/headers";
+import {listModels, testConnection} from "../api/client";
 import {
     activeModelName,
     followDefaultTarget,
     providerModelNames,
     providerProtocol,
     readSiyuanProviders,
-} from "./api/siyuan-provider";
+} from "../api/siyuan-provider";
 import {
     AUTO_APPLY_ALWAYS,
     AUTO_APPLY_NEVER,
@@ -59,11 +59,11 @@ import {
     type ReasoningEffort,
     type TocMode,
     type TruncateMode,
-} from "./config";
-import {setDebug} from "./debug";
+} from "../core/config";
+import {setDebug} from "../core/debug";
 import {preheatPanel, skipFocusRestore} from "./dialog";
-import type {T} from "./i18n";
-import {canEncrypt} from "./secret";
+import type {T} from "../core/i18n";
+import {canEncrypt} from "../core/secret";
 
 /**
  * 供应商是否靠自己配的请求头鉴权（与思源自己的判定一致：

@@ -5,11 +5,11 @@
  * 窗口里明写「无法撤销」，因为思源的文档重命名没有撤销栈。
  */
 import {Dialog, showMessage} from "siyuan";
-import {applyTitles} from "./apply";
-import type {ApiSettings, BehaviorSettings} from "./config";
-import {debug} from "./debug";
-import type {T} from "./i18n";
-import {regenerateTitle, type NoteResult} from "./pipeline";
+import {applyTitles} from "../doc/apply";
+import type {ApiSettings, BehaviorSettings} from "../core/config";
+import {debug} from "../core/debug";
+import type {T} from "../core/i18n";
+import {regenerateTitle, type NoteResult} from "../title/pipeline";
 
 /** 重新生成的回执共用同一个 id：连点几行时后一条顶掉前一条，而不是堆满屏幕。 */
 const REGENERATE_ID = "ai-title-regenerate";

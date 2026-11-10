@@ -8,7 +8,7 @@ import {getActiveEditor, Plugin, showMessage, hideMessage} from "siyuan";
 import type {ICommandContext, IMenu, IProtyle, TEventBus} from "siyuan";
 import {parseCustomHeaders} from "./api/headers";
 import {findSiyuanProvider} from "./api/siyuan-provider";
-import {applyGeneratedSilently, openGenerateDialog, type NoteInfo} from "./dialog";
+import {applyGeneratedSilently, openGenerateDialog, type NoteInfo} from "./ui/dialog";
 import {
     DEFAULT_SETTINGS,
     defaultTitleLanguage,
@@ -17,16 +17,16 @@ import {
     PROTOCOL_SIYUAN_PROVIDER,
     STORAGE_NAME,
     type PluginSettings,
-} from "./config";
-import {getDocTitle, isDocTitleEmpty} from "./content";
-import {debug, debugError, debugJson, setDebug} from "./debug";
-import {loadDeviceSelection, saveDeviceSelection, withoutDeviceState} from "./device-store";
-import {makeT, type T} from "./i18n";
-import {isBlankEditor, watchPastedNote} from "./paste";
-import {generateTitles, type GenerateOutcome, type NoteResult} from "./pipeline";
-import {sealSettings, unsealSettings} from "./secret";
-import {openSettingsPanel} from "./settings-panel";
-import {ICON_ID, ICON_SVG} from "./icons";
+} from "./core/config";
+import {getDocTitle, isDocTitleEmpty} from "./doc/content";
+import {debug, debugError, debugJson, setDebug} from "./core/debug";
+import {loadDeviceSelection, saveDeviceSelection, withoutDeviceState} from "./core/device-store";
+import {makeT, type T} from "./core/i18n";
+import {isBlankEditor, watchPastedNote} from "./doc/paste";
+import {generateTitles, type GenerateOutcome, type NoteResult} from "./title/pipeline";
+import {sealSettings, unsealSettings} from "./core/secret";
+import {openSettingsPanel} from "./ui/settings-panel";
+import {ICON_ID, ICON_SVG} from "./core/icons";
 import "./index.scss";
 
 const TOP_BAR_ID = "ai-title-topbar";

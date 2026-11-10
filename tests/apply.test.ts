@@ -1,5 +1,5 @@
 import {afterEach, describe, expect, it} from "vitest";
-import {applyTitles} from "../src/apply";
+import {applyTitles} from "../src/doc/apply";
 import {setFetchSyncPost} from "./stubs/siyuan";
 
 /** 记下一次内核请求的 URL 与请求体。 */

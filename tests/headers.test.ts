@@ -1,5 +1,5 @@
 import {afterEach, describe, expect, it} from "vitest";
-import {DEFAULT_SETTINGS, type ApiSettings} from "../src/config";
+import {DEFAULT_SETTINGS, type ApiSettings} from "../src/core/config";
 import {parseCustomHeaders, withCustomHeaders} from "../src/api/headers";
 
 const API: ApiSettings = {

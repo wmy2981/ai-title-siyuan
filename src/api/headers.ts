@@ -10,7 +10,7 @@
  * 每次请求前都重新解析：变量可以被别的插件按会话改写（如 opencode-go-siyuan 每段
  * 对话写一次会话 ID），存下来的只是引用文本。
  */
-import type {ApiSettings} from "../config";
+import type {ApiSettings} from "../core/config";
 import {ApiError, hostOf} from "./protocol";
 
 /** 思源「设置 → 密钥和变量」里的一条密钥。 */

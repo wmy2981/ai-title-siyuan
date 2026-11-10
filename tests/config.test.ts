@@ -18,7 +18,7 @@ import {
     REASONING_EFFORT_OFF,
     selectedModel,
     type ApiSettings,
-} from "../src/config";
+} from "../src/core/config";
 
 describe("mergeSettings（旧配置兼容）", () => {
     it("什么都没存时给出默认值", () => {

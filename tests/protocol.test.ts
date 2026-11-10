@@ -7,7 +7,7 @@ import {
     PROTOCOL_RESPONSES,
     REASONING_DEFAULT,
     type ApiSettings,
-} from "../src/config";
+} from "../src/core/config";
 import {adapterFor, ApiError, type ChatParams, type ProtocolAdapter} from "../src/api/protocol";
 
 const PARAMS: ChatParams = {system: "SYS", user: "USER"};
