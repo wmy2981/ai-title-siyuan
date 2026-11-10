@@ -18,8 +18,8 @@ import {
     type BehaviorSettings,
     type MediaMode,
     type TruncateMode,
-} from "./config";
-import {debug} from "./debug";
+} from "../core/config";
+import {debug} from "../core/debug";
 
 export interface NoteContent {
     id: string;

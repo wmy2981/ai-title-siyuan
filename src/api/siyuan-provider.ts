@@ -27,7 +27,7 @@ import {
     PROTOCOL_SIYUAN_PROVIDER,
     PROVIDER_FOLLOW_AGENT,
     PROVIDER_FOLLOW_EDITOR,
-} from "../config";
+} from "../core/config";
 
 export interface SiyuanProviderModel {
     id?: string;

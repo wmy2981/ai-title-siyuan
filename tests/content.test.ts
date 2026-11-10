@@ -11,8 +11,8 @@ import {
     TRUNCATE_TAIL,
     type BehaviorSettings,
     type TruncateMode,
-} from "../src/config";
-import {fetchNoteContent, replaceMedia, truncate} from "../src/content";
+} from "../src/core/config";
+import {fetchNoteContent, replaceMedia, truncate} from "../src/doc/content";
 import {setFetchSyncPost} from "./stubs/siyuan";
 
 /** truncate 在「开头 + 末尾」两段之间插入的标记，断言长度时要把它的长度算进去。 */

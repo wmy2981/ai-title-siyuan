@@ -15,6 +15,22 @@ There is no linter. The tests cover what can run outside SiYuan: protocol reques
 
 `vitest.config.ts` aliases `siyuan` to `tests/stubs/siyuan.ts`: the SDK ships types only, and the runtime symbols are injected by the host. The stub's `setFetchSyncPost` lets a test drive `chat()` end to end, including retries and the `max_tokens` fallback.
 
+## Layout
+
+```
+src/
+├── index.ts   plugin entry: commands, event wiring, top bar
+├── index.scss
+├── i18n/      runtime tables; the host loads this directory, so the path is fixed
+├── core/      config, debug, i18n lookup, icons, secret encryption, device-local state
+├── api/       transport: chat client, custom headers, JSON extraction, protocol adapters, provider lookup
+├── title/     generation: prompt rendering and the batched pipeline
+├── doc/       note I/O: content export, title write-back, blank-note paste trigger
+└── ui/        dialog and settings panel
+```
+
+Dependencies point inward: `ui → title / doc / api / core`, `title → api / core`, `doc → core`, `api → core`.
+
 ## Build constraints
 
 The bundle must stay **CommonJS**. SiYuan's plugin loader wraps plugin code in `(function anonymous(require, module, exports){...})` and `eval`s it, so ESM output dies at runtime with `SyntaxError: Cannot use import statement outside a module`. Keep `formats: ["cjs"]` and the `index.js` entry in `vite.config.ts`, and keep `siyuan` external — the host injects it.
@@ -38,4 +54,4 @@ The bundle must stay **CommonJS**. SiYuan's plugin loader wraps plugin code in `
 - Conventional Commits in English, imperative, lowercase description (e.g. `fix(api): disable thinking with reasoning_effort`). Commit in separate logical points, not one lump.
 - Code comments are in Chinese. User-facing strings are never hardcoded — put them in both `src/i18n/en.json` and `src/i18n/zh-CN.json`, which must keep identical key sets.
 - Strict TypeScript with `noUnusedLocals`, `noUnusedParameters` and `verbatimModuleSyntax`. An unreferenced local or function is a build error, not a warning — export deliberately-retained code rather than leaving it dead.
-- Deprecated settings fields are cleared in `mergeSettings` (`src/config.ts`) and must never be reintroduced into the request body.
+- Deprecated settings fields are cleared in `mergeSettings` (`src/core/config.ts`) and must never be reintroduced into the request body.

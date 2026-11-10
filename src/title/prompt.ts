@@ -9,7 +9,7 @@
  *   {{system}}   追加到系统提示词末尾的自定义说明
  *   {{user}}     追加到用户提示词末尾的自定义说明
  */
-import {DEFAULT_SYSTEM_PROMPT, DEFAULT_USER_PROMPT, INJECTION_GUARD, type BehaviorSettings} from "./config";
+import {DEFAULT_SYSTEM_PROMPT, DEFAULT_USER_PROMPT, INJECTION_GUARD, type BehaviorSettings} from "../core/config";
 
 export interface NoteText {
     id: string;

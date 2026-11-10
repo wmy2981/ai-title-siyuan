@@ -1,6 +1,6 @@
 import {describe, expect, it} from "vitest";
-import {DEFAULT_SETTINGS, INJECTION_GUARD, type BehaviorSettings} from "../src/config";
-import {buildContent, renderPrompt, type NoteText} from "../src/prompt";
+import {DEFAULT_SETTINGS, INJECTION_GUARD, type BehaviorSettings} from "../src/core/config";
+import {buildContent, renderPrompt, type NoteText} from "../src/title/prompt";
 
 function behavior(overrides: Partial<BehaviorSettings> = {}): BehaviorSettings {
     return {...DEFAULT_SETTINGS.behavior, ...overrides};

@@ -4,12 +4,12 @@
  * 并发上限只限制同时在飞的请求数，超出的批次排队，某个批次一返回就补位。
  * 单个批次失败不影响其他批次，最终统一汇总，避免一篇笔记拖垮整次操作。
  */
-import {chat, EMPTY_CONTENT, type ReasoningTrace} from "./api/client";
-import {extractTitles} from "./api/json";
-import {fetchNoteContent, type NoteContent} from "./content";
-import type {ApiSettings, BehaviorSettings} from "./config";
-import {REASONING_EFFORT_OFF} from "./config";
-import {debug, debugError} from "./debug";
+import {chat, EMPTY_CONTENT, type ReasoningTrace} from "../api/client";
+import {extractTitles} from "../api/json";
+import {fetchNoteContent, type NoteContent} from "../doc/content";
+import type {ApiSettings, BehaviorSettings} from "../core/config";
+import {REASONING_EFFORT_OFF} from "../core/config";
+import {debug, debugError} from "../core/debug";
 import {renderPrompt} from "./prompt";
 
 export type NoteFailureReason =
