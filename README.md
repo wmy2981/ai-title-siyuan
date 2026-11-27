@@ -106,6 +106,15 @@ Off by default, switched on under **Extensions**. Once enabled, pasting content 
 - Only the state before the paste counts. A note with content, or one holding just an image, link or embed, is not empty.
 - Pasting several pieces in a row produces a single title, and only after you stop pasting.
 
+### Image OCR text
+
+Off by default, switched on under **Extensions**. When enabled and **Links, images and custom blocks** is not set to **Drop them**, the plugin reads existing OCR text stored in SiYuan (`/api/asset/getImageOCRText`) and appends non-empty results on the same line next to each image (`[image] {OCR text: ...}` or `![alt](url) {OCR text: ...}`).
+
+- Reads existing OCR text only and never triggers OCR; images without OCR text, failed lookups or encrypted assets are left untouched.
+- OCR text counts toward the note body length limit and is truncated together with the body.
+- When OCR text is actually present in a batch, the system prompt notes that `{OCR text: ...}` is secondary, automatically appended image text rather than note prose.
+- Image-only notes with existing OCR text can be titled; image-only notes without OCR text are still skipped as empty.
+
 ## Usage
 
 Four entry points, all doing the same thing:

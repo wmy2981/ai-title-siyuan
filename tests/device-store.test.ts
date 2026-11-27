@@ -1,6 +1,6 @@
 import {beforeEach, describe, expect, it} from "vitest";
-import {DEFAULT_SETTINGS, mergeSettings, PROTOCOL_SIYUAN_PROVIDER, type PluginSettings} from "../src/config";
-import {loadDeviceSelection, saveDeviceSelection, withoutDeviceState} from "../src/device-store";
+import {DEFAULT_SETTINGS, mergeSettings, PROTOCOL_SIYUAN_PROVIDER, type PluginSettings} from "../src/core/config";
+import {loadDeviceSelection, saveDeviceSelection, withoutDeviceState} from "../src/core/device-store";
 import {setFetchSyncPost} from "./stubs/siyuan";
 
 /** 记录每次内核调用，便于断言用的是哪个端点、发了什么。 */

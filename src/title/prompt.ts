@@ -6,10 +6,17 @@
  *   {{language}} 行为配置里的「标题语言」
  *   {{style}}    行为配置里的「标题风格」
  *   {{guard}}    开启注入防护时的说明，为空表示不追加
+ *   {{ocr}}      实际附带图片 OCR 文本时的说明，为空表示不追加
  *   {{system}}   追加到系统提示词末尾的自定义说明
  *   {{user}}     追加到用户提示词末尾的自定义说明
  */
-import {DEFAULT_SYSTEM_PROMPT, DEFAULT_USER_PROMPT, INJECTION_GUARD, type BehaviorSettings} from "./config";
+import {
+    DEFAULT_SYSTEM_PROMPT,
+    DEFAULT_USER_PROMPT,
+    IMAGE_OCR_HINT,
+    INJECTION_GUARD,
+    type BehaviorSettings,
+} from "../core/config";
 
 export interface NoteText {
     id: string;
@@ -17,6 +24,8 @@ export interface NoteText {
     body: string;
     /** 笔记目录。未启用目录时为空串，此时不产出 <toc> 元素。 */
     toc: string;
+    /** 本篇正文是否实际附带了自动追加的图片 OCR 文本。 */
+    hasOcr?: boolean;
 }
 
 /**
@@ -56,9 +65,10 @@ export function renderPrompt(
         content: buildContent(notes),
         language: behavior.titleLanguage,
         style: behavior.titleStyle,
-        // 防护说明自带结尾空行：关掉时用户追加位接在模板原有的空行之后，
-        // 打开时两者之间也正好空一行
+        // 防护说明与 OCR 说明各自自带结尾空行：哪一项关闭就不占位，
+        // 两者都开或只开其一时，段落之间都正好空一行
         guard: behavior.ignoreInjection ? `${INJECTION_GUARD}\n\n` : "",
+        ocr: notes.some((note) => note.hasOcr === true) ? `${IMAGE_OCR_HINT}\n\n` : "",
         system: behavior.systemExtra,
         user: behavior.userExtra,
     };

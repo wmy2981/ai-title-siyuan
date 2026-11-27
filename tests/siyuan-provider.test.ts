@@ -15,7 +15,7 @@ import {
     PROTOCOL_SIYUAN_PROVIDER,
     PROVIDER_FOLLOW_AGENT,
     PROVIDER_FOLLOW_EDITOR,
-} from "../src/config";
+} from "../src/core/config";
 
 /** 思源「设置 → AI → 供应商」里的一条配置，字段取自内核的 conf.Provider。 */
 const PROVIDER = {

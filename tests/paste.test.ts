@@ -1,5 +1,5 @@
 import {describe, expect, it} from "vitest";
-import {isBlankEditor} from "../src/paste";
+import {isBlankEditor} from "../src/doc/paste";
 
 /**
  * 只搭一个够 isBlankEditor 用的壳：它读的是 children、每块的 data-type 与 textContent，

@@ -1,6 +1,6 @@
 import {describe, expect, it} from "vitest";
-import {DEFAULT_SETTINGS, INJECTION_GUARD, type BehaviorSettings} from "../src/config";
-import {buildContent, renderPrompt, type NoteText} from "../src/prompt";
+import {DEFAULT_SETTINGS, IMAGE_OCR_HINT, INJECTION_GUARD, type BehaviorSettings} from "../src/core/config";
+import {buildContent, renderPrompt, type NoteText} from "../src/title/prompt";
 
 function behavior(overrides: Partial<BehaviorSettings> = {}): BehaviorSettings {
     return {...DEFAULT_SETTINGS.behavior, ...overrides};
@@ -95,6 +95,39 @@ describe("renderPrompt（#23 注入防护）", () => {
     it("追加位为空时防护说明是全篇最后一行，且不留多余空行", () => {
         const {system} = renderPrompt([{id: "a", body: "x", toc: ""}], behavior());
         expect(system.endsWith(INJECTION_GUARD)).toBe(true);
+        expect(system.trim()).toBe(system);
+    });
+});
+
+describe("renderPrompt（#36 图片 OCR 系统提示词说明）", () => {
+    it("没有附带 OCR 文本时不追加 OCR 说明", () => {
+        const {system} = renderPrompt([{id: "a", body: "纯正文", toc: ""}], behavior());
+        expect(system).not.toContain(IMAGE_OCR_HINT);
+        expect(system).not.toContain("{{ocr}}");
+    });
+
+    it("批次中任一篇附带 OCR 时在规则与防护之后、用户追加之前加入说明", () => {
+        const {system} = renderPrompt(
+            [
+                {id: "a", body: "正文", toc: "", hasOcr: false},
+                {id: "b", body: "[image] {OCR text: 架构图}", toc: "", hasOcr: true},
+            ],
+            behavior({systemExtra: "SYSTEM EXTRA"}),
+        );
+        expect(system).toContain(INJECTION_GUARD);
+        expect(system).toContain(IMAGE_OCR_HINT);
+        expect(system.indexOf(INJECTION_GUARD)).toBeLessThan(system.indexOf(IMAGE_OCR_HINT));
+        expect(system.indexOf(IMAGE_OCR_HINT)).toBeLessThan(system.indexOf("SYSTEM EXTRA"));
+    });
+
+    it("关闭注入防护时仍独立保留 OCR 说明", () => {
+        const {system} = renderPrompt(
+            [{id: "a", body: "[image] {OCR text: 发票}", toc: "", hasOcr: true}],
+            behavior({ignoreInjection: false}),
+        );
+        expect(system).not.toContain(INJECTION_GUARD);
+        expect(system).toContain(IMAGE_OCR_HINT);
+        expect(system.endsWith(IMAGE_OCR_HINT)).toBe(true);
         expect(system.trim()).toBe(system);
     });
 });

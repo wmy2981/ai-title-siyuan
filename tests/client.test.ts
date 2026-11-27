@@ -7,7 +7,7 @@ import {
     PROTOCOL_RESPONSES,
     type ApiSettings,
     type BehaviorSettings,
-} from "../src/config";
+} from "../src/core/config";
 import {ApiError, chat, EMPTY_CONTENT, listModels, testConnection} from "../src/api/client";
 import {setFetchSyncPost} from "./stubs/siyuan";
 

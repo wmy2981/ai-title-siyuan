@@ -20,7 +20,7 @@ import {
     type AdapterProtocol,
     type ApiSettings,
     type ReasoningEffort,
-} from "../config";
+} from "../core/config";
 
 /** 一次请求用的两条提示词。各协议把它们放在不同位置（messages / instructions / system）。 */
 export interface ChatParams {

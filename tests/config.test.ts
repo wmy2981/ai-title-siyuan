@@ -18,7 +18,7 @@ import {
     REASONING_EFFORT_OFF,
     selectedModel,
     type ApiSettings,
-} from "../src/config";
+} from "../src/core/config";
 
 describe("mergeSettings（旧配置兼容）", () => {
     it("什么都没存时给出默认值", () => {
@@ -92,6 +92,13 @@ describe("mergeSettings（旧配置兼容）", () => {
         expect(mergeSettings(undefined).behavior.ignoreInjection).toBe(true);
         expect(mergeSettings({behavior: {batchSize: 5}}).behavior.ignoreInjection).toBe(true);
         expect(mergeSettings({behavior: {ignoreInjection: false}}).behavior.ignoreInjection).toBe(false);
+    });
+
+    it("图片 OCR 默认关闭，旧配置缺字段时回退关闭（#36）", () => {
+        expect(DEFAULT_SETTINGS.extension.includeImageOcr).toBe(false);
+        expect(mergeSettings(undefined).extension.includeImageOcr).toBe(false);
+        expect(mergeSettings({extension: {autoTitleOnPaste: true}}).extension.includeImageOcr).toBe(false);
+        expect(mergeSettings({extension: {includeImageOcr: true}}).extension.includeImageOcr).toBe(true);
     });
 
     it("旧版可改写的完整提示词被删掉，只留追加位（#5）", () => {

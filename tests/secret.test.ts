@@ -1,6 +1,6 @@
 import {afterEach, describe, expect, it, vi} from "vitest";
-import {DEFAULT_SETTINGS, PROTOCOL_CHAT_COMPLETIONS, type PluginSettings} from "../src/config";
-import {canEncrypt, seal, sealSettings, unseal, unsealSettings} from "../src/secret";
+import {DEFAULT_SETTINGS, PROTOCOL_CHAT_COMPLETIONS, type PluginSettings} from "../src/core/config";
+import {canEncrypt, seal, sealSettings, unseal, unsealSettings} from "../src/core/secret";
 
 /** 一份填好了 API Key 的配置。 */
 function settingsWithKey(apiKey: string, apiKeyEncrypted = ""): PluginSettings {
