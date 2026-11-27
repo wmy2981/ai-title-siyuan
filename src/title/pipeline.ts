@@ -7,8 +7,8 @@
 import {chat, EMPTY_CONTENT, type ReasoningTrace} from "../api/client";
 import {extractTitles} from "../api/json";
 import {fetchNoteContent, type NoteContent} from "../doc/content";
-import type {ApiSettings, BehaviorSettings} from "../core/config";
-import {REASONING_EFFORT_OFF} from "../core/config";
+import type {ApiSettings, BehaviorSettings, ExtensionSettings} from "../core/config";
+import {DEFAULT_SETTINGS, REASONING_EFFORT_OFF} from "../core/config";
 import {debug, debugError} from "../core/debug";
 import {renderPrompt} from "./prompt";
 
@@ -48,6 +48,7 @@ export interface GenerateOptions {
     ids: string[];
     api: ApiSettings;
     behavior: BehaviorSettings;
+    extension?: ExtensionSettings;
     /** 每完成一个批次回调一次，用于更新进度提示。 */
     onProgress?: (done: number, total: number) => void;
 }
@@ -64,11 +65,15 @@ function messageOf(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
 
-async function loadContents(ids: string[], behavior: BehaviorSettings): Promise<NoteContent[]> {
+async function loadContents(
+    ids: string[],
+    behavior: BehaviorSettings,
+    extension: ExtensionSettings,
+): Promise<NoteContent[]> {
     const contents: NoteContent[] = [];
     for (const id of ids) {
         try {
-            contents.push(await fetchNoteContent(id, behavior));
+            contents.push(await fetchNoteContent(id, behavior, extension));
         } catch (error) {
             debugError(`Failed to load note ${id}`, error);
             contents.push({id, title: "", body: "", toc: "", truncated: false, empty: true, message: messageOf(error)});
@@ -129,14 +134,14 @@ function debugResults(batchIndex: number, results: NoteResult[]): void {
 
 /** 并发跑完所有批次，结果按传入顺序排列，便于与选中文档一一对应。 */
 export async function generateTitles(options: GenerateOptions): Promise<GenerateOutcome> {
-    const {ids, api, behavior, onProgress} = options;
+    const {ids, api, behavior, extension = DEFAULT_SETTINGS.extension, onProgress} = options;
     if (ids.length === 0) {
         return {results: [], batchErrors: []};
     }
     // 没要求关闭思考时模型推理是预期行为，不必统计，也就不会提示
     const watchReasoning = api.reasoningEffort === REASONING_EFFORT_OFF;
 
-    const contents = await loadContents(ids, behavior);
+    const contents = await loadContents(ids, behavior, extension);
 
     const results: NoteResult[] = [];
     const pending: NoteContent[] = [];
@@ -209,7 +214,8 @@ export async function regenerateTitle(
     id: string,
     api: ApiSettings,
     behavior: BehaviorSettings,
+    extension: ExtensionSettings = DEFAULT_SETTINGS.extension,
 ): Promise<NoteResult> {
-    const outcome = await generateTitles({ids: [id], api, behavior});
+    const outcome = await generateTitles({ids: [id], api, behavior, extension});
     return outcome.results[0] ?? {id, reason: "notReturned"};
 }
