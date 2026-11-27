@@ -121,6 +121,8 @@
 
   "autoTitleOnPaste": "Title unnamed notes pasted into",
   "autoTitleOnPasteDesc": "Applies only to a note with no body and no title yet: pasting content asks for a title and writes it back to that note. It ignores Apply titles automatically, and a note you already named keeps its title even when its body is empty",
+  "includeImageOcr": "Include image OCR text",
+  "includeImageOcrDesc": "Reads existing image OCR text from SiYuan and appends it on the same line next to each image (counted toward the body length limit). Applies only when Links, images and custom blocks is not set to Drop them, and never triggers new OCR",
 
   "showTopBar": "Show toolbar button",
   "showTopBarDesc": "Adds a generate button to the top bar",

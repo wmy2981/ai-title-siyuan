@@ -6,7 +6,7 @@
  */
 import {Dialog, showMessage} from "siyuan";
 import {applyTitles} from "../doc/apply";
-import type {ApiSettings, BehaviorSettings} from "../core/config";
+import type {ApiSettings, BehaviorSettings, ExtensionSettings} from "../core/config";
 import {debug} from "../core/debug";
 import type {T} from "../core/i18n";
 import {regenerateTitle, type NoteResult} from "../title/pipeline";
@@ -37,6 +37,7 @@ export interface GenerateDialogOptions {
     notes: Map<string, NoteInfo>;
     api: ApiSettings;
     behavior: BehaviorSettings;
+    extension: ExtensionSettings;
 }
 
 function div(className?: string, text?: string): HTMLDivElement {
@@ -148,7 +149,7 @@ export function skipFocusRestore(dialog: Dialog): void {
 }
 
 export function openGenerateDialog(options: GenerateDialogOptions): void {
-    const {t, batchErrors, api, behavior} = options;
+    const {t, batchErrors, api, behavior, extension} = options;
     const notes = options.notes;
 
     const dialog = new Dialog({
@@ -222,7 +223,7 @@ export function openGenerateDialog(options: GenerateDialogOptions): void {
             debug(`Regenerating title for ${result.id}`);
             setBusy(true);
             try {
-                const next = await regenerateTitle(result.id, api, behavior);
+                const next = await regenerateTitle(result.id, api, behavior, extension);
                 result.title = next.title;
                 result.reason = next.reason;
                 result.message = next.message;

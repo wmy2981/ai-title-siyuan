@@ -412,7 +412,7 @@ export default class AiTitlePlugin extends Plugin {
      * 也不看「自动应用标题」设置 —— 用户已经把内容粘贴进来，意图是明确的。
      */
     private async runGeneration(ids: string[], source: string, applyImmediately = false): Promise<void> {
-        const {api, behavior} = this.settings;
+        const {api, behavior, extension} = this.settings;
         // 闸在第一个 await 之前落下：慢的是网络，重复点击往往正发生在这一段
         if (this.generating) {
             debug(`Ignored a repeated generation request from "${source}"`);
@@ -434,6 +434,7 @@ export default class AiTitlePlugin extends Plugin {
                 ids,
                 api,
                 behavior,
+                extension,
                 onProgress: (done, total) => {
                     // 只有确实分批时才值得显示进度
                     if (total > 1) {
@@ -503,6 +504,7 @@ export default class AiTitlePlugin extends Plugin {
             notes,
             api: this.settings.api,
             behavior: this.settings.behavior,
+            extension: this.settings.extension,
         });
     }
 
