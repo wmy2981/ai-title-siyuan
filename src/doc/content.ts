@@ -7,6 +7,7 @@
  */
 import {fetchSyncPost} from "siyuan";
 import {
+    DEFAULT_SETTINGS,
     MEDIA_DROP,
     MEDIA_PLACEHOLDER,
     MEDIA_RAW,
@@ -16,6 +17,7 @@ import {
     TRUNCATE_HEAD,
     TRUNCATE_TAIL,
     type BehaviorSettings,
+    type ExtensionSettings,
     type MediaMode,
     type TruncateMode,
 } from "../core/config";
@@ -33,6 +35,8 @@ export interface NoteContent {
     truncated: boolean;
     /** 正文是否为空，用于跳过不请求。只看正文，不含文档标题与目录。 */
     empty: boolean;
+    /** 最终传入的 body 中是否实际包含自动追加的图片 OCR 文本，用于决定是否追加系统提示词说明。 */
+    hasOcr?: boolean;
     /** 仅当抓取本身失败时存在，此时 body 为空、empty 为 true。 */
     message?: string;
 }
@@ -52,6 +56,15 @@ const VIDEO_EXTENSIONS = new Set(["mp4", "webm", "mov", "mkv", "avi", "wmv", "fl
 
 /** 替换媒体引用时写进正文的固定占位符，判断空笔记时要把它们摘掉。 */
 const PLACEHOLDER_TOKENS = /\[(?:image|audio|video|iframe|link|file(?:\(\.[a-z0-9]+\))?)\]/gi;
+
+/** 追加在图片或 `[image]` 同行的 OCR 文本前缀（#36）。 */
+const OCR_MARKER_PREFIX = "{OCR text: ";
+
+/** 判断空笔记时摘掉 OCR 外壳标签本身，避免外框里的 `OCR text` 冒充正文内容，而保留里面的真实识别文本。 */
+const OCR_LABEL_PREFIX = /\{OCR text:\s*/g;
+
+/** 导出 Markdown 里的图片语法 `![alt](url ...)`，捕获第一个空白或 `)` 之前的原始路径。 */
+const IMAGE_SYNTAX = /!\[[^\]]*\]\(([^)\s]+)[^)]*\)/g;
 
 /**
  * 导出正文里自定义块的围栏：首行是 `;;;插件包名/块类型`，末行是单独的 `;;;`。
@@ -97,6 +110,95 @@ function imagePlaceholder(url: string): string {
     return extension === "" || IMAGE_EXTENSIONS.has(extension) ? "[image]" : `[file(.${extension})]`;
 }
 
+/** 路径是否可能对应思源本地图片资源（跳过远程 URL 与 data URI，它们不会有思源本地 OCR 记录）。 */
+function isOcrCandidateUrl(url: string): boolean {
+    if (imagePlaceholder(url) !== "[image]") {
+        return false;
+    }
+    return !/^(?:https?:|data:)/i.test(url);
+}
+
+/** 把 OCR 原文折叠为单行，确保严格附在图片或 `[image]` 同行且不破坏 Markdown 块结构。 */
+function normalizeOcrText(text: string): string {
+    return text.replace(/\s+/g, " ").trim();
+}
+
+/** 仅对自定义块围栏之外的片段执行变换，保证原始模式下自定义块内的图片既不读取也不追加 OCR。 */
+function replaceOutsideCustomBlocks(markdown: string, transform: (segment: string) => string): string {
+    const parts: string[] = [];
+    let lastIndex = 0;
+    for (const match of markdown.matchAll(CUSTOM_BLOCK_FENCE)) {
+        const start = match.index ?? 0;
+        if (start > lastIndex) {
+            parts.push(transform(markdown.slice(lastIndex, start)));
+        }
+        parts.push(match[0]);
+        lastIndex = start + match[0].length;
+    }
+    if (lastIndex < markdown.length) {
+        parts.push(transform(markdown.slice(lastIndex)));
+    }
+    return parts.join("");
+}
+
+/**
+ * 从导出 Markdown 中提取需要查询 OCR 的图片原始路径（去重、保留 `?box=` / 查询参数 / `#fragment`）。
+ *
+ * 先摘掉自定义块：块内可能嵌有图片语法，但整块本身不属于正文图片，不应请求 OCR。
+ */
+export function extractImagePaths(markdown: string): string[] {
+    const withoutBlocks = markdown.replace(CUSTOM_BLOCK_FENCE, "");
+    const seen = new Set<string>();
+    for (const match of withoutBlocks.matchAll(IMAGE_SYNTAX)) {
+        const url = match[1];
+        if (url && isOcrCandidateUrl(url)) {
+            seen.add(url);
+        }
+    }
+    return Array.from(seen);
+}
+
+interface ImageOcrResponse {
+    code: number;
+    msg: string;
+    data?: {
+        text?: string;
+        failed?: boolean;
+    };
+}
+
+/**
+ * 读取思源中某张图片已有的 OCR 文本（POST /api/asset/getImageOCRText，思源 3.8.12 基线）。
+ *
+ * 路径原样传给内核（保留 `?box=`、查询参数与 `#fragment`）：内核的 OCRAssetKey() 会按笔记本隔离
+ * 同名资源并统一处理显示参数。无文本、加密资源、`failed=true` 或请求异常均返回空串，不影响整篇笔记。
+ */
+async function readImageOcrText(path: string): Promise<string> {
+    try {
+        const response = (await fetchSyncPost("/api/asset/getImageOCRText", {path})) as ImageOcrResponse;
+        if (response.code !== 0 || response.data?.failed === true) {
+            return "";
+        }
+        return normalizeOcrText(response.data?.text ?? "");
+    } catch {
+        return "";
+    }
+}
+
+/** 去重批量读取图片 OCR 文本，只保留非空结果。 */
+async function readImageOcrTexts(paths: readonly string[]): Promise<Map<string, string>> {
+    const entries = await Promise.all(
+        paths.map(async (path): Promise<[string, string]> => [path, await readImageOcrText(path)]),
+    );
+    const result = new Map<string, string>();
+    for (const [path, text] of entries) {
+        if (text !== "") {
+            result.set(path, text);
+        }
+    }
+    return result;
+}
+
 /** 链接语法 `[text](url)` 的占位符：站内附件带上扩展名，其余一律 `[link]`。 */
 function linkPlaceholder(url: string): string {
     const clean = url.split(/[?#]/)[0];
@@ -129,6 +231,8 @@ export interface MediaHandling {
      * 它们随块类型变化，写不进固定的 PLACEHOLDER_TOKENS，判断空笔记时要由调用方一并摘掉。
      */
     customTokens: string[];
+    /** 本次是否实际向正文追加了图片 OCR 文本。 */
+    hasOcr: boolean;
 }
 
 /**
@@ -139,11 +243,38 @@ export interface MediaHandling {
  * 自定义块更占地方，按钮块的块内容是一整段 JSON。
  * 保留占位符而不是直接丢弃，是为了让模型知道原文在哪儿断开了，
  * 免得它把前后两段不相干的文字当成一句话来读。
+ *
+ * 开启图片 OCR 且非丢弃模式时，把非空 OCR 文本附在对应图片链接或 `[image]` 同行（#36）。
  */
-export function replaceMedia(markdown: string, mode: MediaMode): MediaHandling {
+export function replaceMedia(
+    markdown: string,
+    mode: MediaMode,
+    ocrTexts?: ReadonlyMap<string, string>,
+): MediaHandling {
+    let hasOcr = false;
+    const appendOcr = (base: string, url: string): string => {
+        const raw = ocrTexts?.get(url);
+        const ocr = raw === undefined ? "" : normalizeOcrText(raw);
+        if (ocr === "") {
+            return base;
+        }
+        hasOcr = true;
+        return `${base} ${OCR_MARKER_PREFIX}${ocr}}`;
+    };
+
     if (mode === MEDIA_RAW) {
-        return {text: markdown, customTokens: []};
+        if (!ocrTexts || ocrTexts.size === 0) {
+            return {text: markdown, customTokens: [], hasOcr: false};
+        }
+        // 原始模式保留自定义块原文，但块内图片同样不追加 OCR
+        const text = replaceOutsideCustomBlocks(markdown, (segment) =>
+            segment.replace(IMAGE_SYNTAX, (match, url: string) =>
+                imagePlaceholder(url) === "[image]" ? appendOcr(match, url) : match,
+            ),
+        );
+        return {text, customTokens: [], hasOcr};
     }
+
     const keep = (label: string): string => (mode === MEDIA_DROP ? "" : label);
     // 自定义块排在最前：块内容里也有链接和图片，整块先摘掉就不必再逐条替换
     const customTokens: string[] = [];
@@ -157,9 +288,15 @@ export function replaceMedia(markdown: string, mode: MediaMode): MediaHandling {
     const text = withoutBlocks
         // 音视频与内嵌 iframe 在思源导出里是原样保留的 HTML 标签
         .replace(/<(iframe|video|audio)\b[^>]*?(?:\/>|>[\s\S]*?<\/\1>)/gi, (_match, tag: string) => keep(`[${tag.toLowerCase()}]`))
-        .replace(/!\[[^\]]*\]\(([^)\s]+)[^)]*\)/g, (_match, url: string) => keep(imagePlaceholder(url)))
+        .replace(IMAGE_SYNTAX, (_match, url: string) => {
+            if (mode === MEDIA_DROP) {
+                return "";
+            }
+            const placeholder = imagePlaceholder(url);
+            return placeholder === "[image]" ? appendOcr(placeholder, url) : placeholder;
+        })
         .replace(/\[([^\]]*)\]\(([^)\s]+)[^)]*\)/g, (_match, _text: string, url: string) => keep(linkPlaceholder(url)));
-    return {text, customTokens};
+    return {text, customTokens, hasOcr};
 }
 
 function normalizeWhitespace(markdown: string): string {
@@ -223,7 +360,10 @@ export function truncate(text: string, mode: TruncateMode, limit: number, headRa
  * 一张图或一个自定义块配一行字的笔记，不该靠占位符里那几个字母冒充内容。
  */
 function hasSubstance(text: string, customTokens: readonly string[]): boolean {
-    let plain = text.replace(PLACEHOLDER_TOKENS, "").replace(/<\/?[a-z][^>]*>/gi, "");
+    let plain = text
+        .replace(PLACEHOLDER_TOKENS, "")
+        .replace(OCR_LABEL_PREFIX, "")
+        .replace(/<\/?[a-z][^>]*>/gi, "");
     for (const token of customTokens) {
         plain = plain.replaceAll(token, "");
     }
@@ -369,7 +509,11 @@ async function readOutline(id: string): Promise<string> {
  * contentLimit 只作用于正文本身：提示词里的 <id> 与后续的 <toc> 都不受它限制，
  * 目录必须完整才有意义（否则截断后剩下的层级关系反而误导模型）。
  */
-export async function fetchNoteContent(id: string, behavior: BehaviorSettings): Promise<NoteContent> {
+export async function fetchNoteContent(
+    id: string,
+    behavior: BehaviorSettings,
+    extension: ExtensionSettings = DEFAULT_SETTINGS.extension,
+): Promise<NoteContent> {
     const response = (await fetchSyncPost("/api/export/exportMdContent", {
         id,
         // 3 = 仅锚文本，0 = 原始文本，不输出 YAML front matter，不追加文档标题行
@@ -386,7 +530,10 @@ export async function fetchNoteContent(id: string, behavior: BehaviorSettings): 
     }
 
     const raw = response.data?.content ?? "";
-    const handled = replaceMedia(raw, behavior.mediaMode);
+    const wantsOcr = extension.includeImageOcr && behavior.mediaMode !== MEDIA_DROP;
+    const imagePaths = wantsOcr ? extractImagePaths(raw) : [];
+    const ocrTexts = imagePaths.length > 0 ? await readImageOcrTexts(imagePaths) : undefined;
+    const handled = replaceMedia(raw, behavior.mediaMode, ocrTexts);
     const cleaned = normalizeWhitespace(handled.text);
     // 空笔记只看正文本身：文档标题不算内容，否则一篇只有标题的空文档
     // 会被当成「有内容」发去请求，模型只能把现有标题换个说法再还回来。
@@ -397,6 +544,8 @@ export async function fetchNoteContent(id: string, behavior: BehaviorSettings): 
     const titled = title === "" ? cleaned : `# ${title}\n\n${cleaned}`;
     const body = truncate(titled, behavior.truncateMode, behavior.contentLimit, behavior.truncateHeadRatio);
     const truncated = body.length < titled.length;
+    // 只有最终留在 body 里的 OCR 才算实际传入：被截断裁掉时不必在系统提示词里多解释一段
+    const hasOcr = handled.hasOcr && body.includes(OCR_MARKER_PREFIX);
 
     // 目录不截取：只传一半的层级结构比不传更容易误导模型
     const wantsToc = behavior.tocMode === TOC_ALWAYS || (behavior.tocMode === TOC_TRUNCATED && truncated);
@@ -406,9 +555,10 @@ export async function fetchNoteContent(id: string, behavior: BehaviorSettings): 
 
     debug(
         `Note ${id}: exported ${raw.length} chars, after media handling ${cleaned.length}, ` +
+        `ocr ${wantsOcr ? `${ocrTexts?.size ?? 0}/${imagePaths.length} image(s)` : "off"}, ` +
         `title ${title === "" ? "(none)" : `"${title}"`}, body ${body.length} chars${truncated ? ` (truncated from ${titled.length})` : ""}, ` +
         `outline ${wantsToc ? `${toc.split("\n").filter((line) => line !== "").length} heading(s)` : "not requested"}, ` +
         `substance ${empty ? "none" : "yes"}`,
     );
-    return {id, title, body, toc, truncated, empty};
+    return {id, title, body, toc, truncated, empty, hasOcr};
 }
