@@ -1356,6 +1356,25 @@ function buildExtensionGroup(setting: Setting, t: T, settings: PluginSettings): 
         }
     });
 
+    let includeImageOcr: HTMLInputElement | undefined;
+    addField(setting, {
+        title: t("includeImageOcr"),
+        description: t("includeImageOcrDesc"),
+        build: () => {
+            const node = switchControl();
+            node.addEventListener("change", () => {
+                extension.includeImageOcr = node.checked;
+            });
+            includeImageOcr = node;
+            return node;
+        },
+    });
+    syncs.push(() => {
+        if (includeImageOcr) {
+            includeImageOcr.checked = extension.includeImageOcr;
+        }
+    });
+
     return () => syncs.forEach((sync) => sync());
 }
 
