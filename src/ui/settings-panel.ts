@@ -277,6 +277,8 @@ function parseOptionalNumber(raw: string): number | null {
 }
 
 export interface SettingsPanelOptions {
+    /** 面板标题，与思源 `Plugin.openSetting()` 约定一致（`this.displayName || this.name`）。 */
+    title: string;
     t: T;
     settings: PluginSettings;
     /** 确认后写回配置并重建界面入口。 */
@@ -442,7 +444,7 @@ export function openSettingsPanel(options: SettingsPanelOptions): void {
     const frontend = getFrontend();
     const mobile = frontend === "mobile" || frontend === "browser-mobile";
     if (!mobile) {
-        setting.open(t("pluginName"));
+        setting.open(options.title);
     } else {
         const prototype = HTMLElement.prototype;
         const originalFocus = prototype.focus;
@@ -453,7 +455,7 @@ export function openSettingsPanel(options: SettingsPanelOptions): void {
             }
         };
         try {
-            setting.open(t("pluginName"));
+            setting.open(options.title);
         } finally {
             prototype.focus = originalFocus;
         }

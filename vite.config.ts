@@ -11,7 +11,7 @@ export default defineConfig(({mode}) => ({
     build: {
         outDir: "dist",
         emptyOutDir: true,
-        // 开发模式保留可读代码，生产模式由 esbuild 压缩
+        // 开发模式保留可读代码，生产模式由 Oxc 压缩
         minify: mode === "production",
         sourcemap: mode !== "production",
         lib: {
@@ -20,7 +20,7 @@ export default defineConfig(({mode}) => ({
             fileName: () => "index.js",
             cssFileName: "index",
         },
-        rollupOptions: {
+        rolldownOptions: {
             external: ["siyuan"],
         },
     },

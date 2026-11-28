@@ -43,7 +43,7 @@ The bundle must stay **CommonJS**. SiYuan's plugin loader wraps plugin code in `
 
 `.github/workflows/ci.yml` runs on every push to `main`, on every pull request and on demand: `npm ci`, `npm run typecheck`, `npm test`, `npm run build`, and finally it checks that `package.zip` still contains the files SiYuan needs — `plugin.json`, `index.js`, `index.css`, `icon.png` and both i18n tables. A green test run with an unpackable zip would still ship nothing.
 
-`node-version` is pinned to 20 in both workflows; keep them in step.
+`node-version` is pinned to 24 in both workflows; keep them in step.
 
 ## Release
 

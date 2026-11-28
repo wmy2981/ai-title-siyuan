@@ -155,8 +155,8 @@ async function applyRichTitle(edit: TitleEdit, revision: string): Promise<string
         ? {
             expectedRevision: revision,
             source: {
-                spec: 1,
-                format: "inline-ast",
+                spec: 1 as const,
+                format: "inline-ast" as const,
                 content: JSON.stringify([{Type: "NodeText", Data: plainTitle(edit.title)}]),
             },
         }
