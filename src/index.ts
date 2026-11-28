@@ -90,6 +90,7 @@ export default class AiTitlePlugin extends Plugin {
 
     openSetting(): void {
         openSettingsPanel({
+            title: this.displayName || this.name,
             t: this.t,
             settings: this.settings,
             onSave: async (next) => {

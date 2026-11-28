@@ -1,6 +1,4 @@
 {
-  "pluginName": "AI标题生成",
-
   "groupApi": "接口配置",
   "groupBehavior": "行为配置",
   "groupExtension": "拓展",
