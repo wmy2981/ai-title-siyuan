@@ -84,7 +84,11 @@ export async function saveDeviceSelection(selection: DeviceSelection): Promise<v
     try {
         const response = (await fetchSyncPost("/api/storage/setLocalStorageVal", {
             key: SELECTION_KEY,
-            val: selection,
+            val: {
+                protocol: selection.protocol,
+                provider: selection.provider,
+                model: selection.model,
+            },
         })) as StorageResponse;
         if (response?.code !== 0) {
             debugError("Failed to store the local selection", response?.msg ?? response?.code);

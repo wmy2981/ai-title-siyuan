@@ -4,7 +4,7 @@
 import {createWriteStream, existsSync, rmSync} from "node:fs";
 import {cp, stat} from "node:fs/promises";
 import path from "node:path";
-import archiver from "archiver";
+import {ZipArchive} from "archiver";
 
 const root = process.cwd();
 const dist = path.join(root, "dist");
@@ -37,7 +37,7 @@ rmSync(zipPath, {force: true});
 
 await new Promise((resolve, reject) => {
     const output = createWriteStream(zipPath);
-    const archive = archiver("zip", {zlib: {level: 9}});
+    const archive = new ZipArchive({zlib: {level: 9}});
     output.on("close", resolve);
     archive.on("error", reject);
     archive.pipe(output);

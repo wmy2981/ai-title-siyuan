@@ -8,7 +8,7 @@
  * 只实现非流式请求：插件一次只取一小段 JSON，流式带来的复杂度没有收益。
  * 各协议发什么、怎么读响应都在 protocol.ts，这里不认协议。
  */
-import {fetchSyncPost} from "siyuan";
+import {fetchSyncPost, type NetworkForwardRequestInput} from "siyuan";
 import {type ApiSettings, type BehaviorSettings} from "../core/config";
 import {debug, debugError, debugModelText, debugRequest, debugResponse} from "../core/debug";
 import {withCustomHeaders} from "./headers";
@@ -104,7 +104,11 @@ function parseProxyData(response: {code: number; msg: string; data?: unknown}, u
     };
 }
 
-function buildProxyRequest(headers: Record<string, string>, timeout: number, extra: Record<string, unknown>) {
+function buildProxyRequest(
+    headers: Record<string, string>,
+    timeout: number,
+    extra: Pick<NetworkForwardRequestInput, "url" | "method" | "payload" | "payloadEncoding">,
+): NetworkForwardRequestInput {
     return {
         ...extra,
         timeout,
@@ -180,7 +184,7 @@ export async function chat(
             const request = buildProxyRequest(requestHeaders(adapter, target), behavior.timeout, {
                 url,
                 method: "POST",
-                payload,
+                payload: payload as NetworkForwardRequestInput["payload"],
                 payloadEncoding: "json",
             });
             response = parseProxyData(await fetchSyncPost(PROXY_URL, request), url);
